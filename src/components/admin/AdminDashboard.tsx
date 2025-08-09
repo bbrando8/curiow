@@ -74,12 +74,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose })
           />
         );
       case 'users':
-        return permissions.isAdmin ? (
-          <UserManagement
-            currentUser={currentUser}
-            onBack={() => setActiveView('users')} // Rimane nel dashboard
-          />
-        ) : null;
+        return permissions.isAdmin ? <UserManagement currentUser={currentUser} /> : null;
       case 'topics':
         return permissions.isAdmin ? (
           <TopicManagement
