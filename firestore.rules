@@ -1,0 +1,116 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function per verificare se l'utente è autenticato
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function per ottenere i dati dell'utente
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Helper function per verificare il ruolo
+    function hasRole(role) {
+      return isAuthenticated() && getUserData().role == role;
+    }
+
+    // Helper function per verificare se è admin o moderatore
+    function isModerator() {
+      return hasRole('admin') || hasRole('moderator');
+    }
+
+    // Helper function per verificare permessi specifici
+    function hasPermission(permission) {
+      return isAuthenticated() && getUserData().permissions[permission] == true;
+    }
+
+    // --- REGOLE PER GLI UTENTI ---
+    match /users/{userId} {
+      // Gli utenti possono leggere solo il proprio profilo
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+
+      // Solo gli admin possono leggere tutti i profili utente
+      allow read: if hasRole('admin');
+
+      // Gli utenti possono aggiornare solo il proprio profilo (esclusi ruolo e permessi)
+      allow update: if isAuthenticated() &&
+                    request.auth.uid == userId &&
+                    !('role' in request.resource.data) &&
+                    !('permissions' in request.resource.data);
+
+      // Solo gli admin possono modificare ruoli e permessi
+      allow update: if hasRole('admin');
+
+      // Gli utenti possono creare il proprio profilo durante la registrazione
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+
+      // Solo gli admin possono eliminare utenti
+      allow delete: if hasRole('admin');
+    }
+
+    // --- REGOLE PER I CANALI ---
+    match /channels/{channelId} {
+      // Tutti possono leggere i canali
+      allow read: if true;
+
+      // Solo admin e moderatori possono creare/modificare canali
+      allow write: if isModerator();
+    }
+
+    // --- REGOLE PER LE GEMME ---
+    match /gems/{gemId} {
+      // Tutti possono leggere le gemme
+      allow read: if true;
+
+      // Solo utenti con permesso possono creare gemme
+      allow create: if hasPermission('canCreateGems');
+
+      // Solo utenti con permesso possono modificare gemme
+      allow update: if hasPermission('canEditGems');
+
+      // Solo utenti con permesso possono eliminare gemme
+      allow delete: if hasPermission('canDeleteGems');
+
+      // --- REGOLE PER LE DOMANDE DEGLI UTENTI ---
+      match /userQuestions/{questionId} {
+        // Tutti gli utenti autenticati possono leggere le domande
+        allow read: if isAuthenticated();
+
+        // Tutti gli utenti autenticati possono creare domande
+        allow create: if isAuthenticated();
+
+        // Solo moderatori e admin possono modificare/eliminare domande
+        allow update, delete: if isModerator();
+      }
+    }
+
+    // --- REGOLE PER COLLEZIONI AMMINISTRATIVE ---
+    match /admin/{document=**} {
+      allow read, write: if hasRole('admin');
+    }
+
+    // --- REGOLE PER ANALYTICS/LOGS ---
+    match /analytics/{document=**} {
+      allow read: if isModerator();
+      allow write: if isAuthenticated(); // Per tracciare le interazioni utente
+    }
+
+    // --- REGOLE PER GLI ARGOMENTI/TOPIC SUGGESTIONS ---
+    match /topicSuggestions/{topicId} {
+      // Tutti gli admin possono leggere gli argomenti
+      allow read: if hasRole('admin');
+
+      // Solo gli admin possono creare argomenti
+      allow create: if hasRole('admin');
+
+      // Solo gli admin possono modificare argomenti
+      allow update: if hasRole('admin');
+
+      // Solo gli admin possono eliminare argomenti
+      allow delete: if hasRole('admin');
+    }
+  }
+}

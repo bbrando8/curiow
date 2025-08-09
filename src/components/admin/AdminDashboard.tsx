@@ -1,0 +1,152 @@
+import React, { useState } from 'react';
+import { User, UserRole } from '../../types';
+import { useUserPermissions } from '../../services/roleService';
+import ProfileView from '../ProfileView';
+import UserManagement from './UserManagement';
+import TopicManagement from './TopicManagement';
+
+interface AdminDashboardProps {
+  currentUser: User & { id: string } | null;
+  onClose: () => void;
+}
+
+type DashboardView = 'profile' | 'users' | 'topics';
+
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose }) => {
+  const [activeView, setActiveView] = useState<DashboardView>('profile');
+  const permissions = useUserPermissions(currentUser);
+
+  const menuItems = [
+    {
+      id: 'profile' as DashboardView,
+      label: 'Il Mio Profilo',
+      icon: '👤',
+      description: 'Visualizza e modifica il tuo profilo',
+      allowedForAll: true,
+    },
+    {
+      id: 'topics' as DashboardView,
+      label: 'Gestione Argomenti',
+      icon: '💡',
+      description: 'Crea e gestisci gli argomenti per le gemme',
+      allowedForAll: false,
+      requiresAdmin: true,
+    },
+    {
+      id: 'users' as DashboardView,
+      label: 'Gestione Utenti',
+      icon: '👥',
+      description: 'Gestisci ruoli e permessi degli utenti',
+      allowedForAll: false,
+      requiresAdmin: true,
+    },
+  ];
+
+  const visibleMenuItems = menuItems.filter(item =>
+    item.allowedForAll || (item.requiresAdmin && permissions.isAdmin)
+  );
+
+  const renderActiveView = () => {
+    switch (activeView) {
+      case 'profile':
+        return <ProfileView currentUser={currentUser} />;
+      case 'users':
+        return permissions.isAdmin ? <UserManagement currentUser={currentUser} /> : null;
+      case 'topics':
+        return permissions.isAdmin ? <TopicManagement currentUser={currentUser} /> : null;
+      default:
+        return <ProfileView currentUser={currentUser} />;
+    }
+  };
+
+  const getRoleBadgeColor = (role: UserRole) => {
+    switch (role) {
+      case UserRole.ADMIN: return 'bg-red-100 text-red-800';
+      case UserRole.MODERATOR: return 'bg-yellow-100 text-yellow-800';
+      case UserRole.USER: return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-50 z-50 overflow-hidden">
+      <div className="h-full flex">
+        {/* Sidebar */}
+        <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col">
+          {/* Header */}
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+              <button
+                onClick={onClose}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            {currentUser && (
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-600 font-semibold text-lg">
+                    {currentUser.firstName?.[0]}{currentUser.lastName?.[0]}
+                  </span>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900">
+                    {currentUser.firstName} {currentUser.lastName}
+                  </p>
+                  <div className="flex items-center space-x-2">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleBadgeColor(currentUser.role)}`}>
+                      {currentUser.role}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Menu */}
+          <nav className="flex-1 p-4">
+            <ul className="space-y-2">
+              {visibleMenuItems.map((item) => (
+                <li key={item.id}>
+                  <button
+                    onClick={() => setActiveView(item.id)}
+                    className={`w-full text-left p-4 rounded-lg transition-colors ${
+                      activeView === item.id
+                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span className="text-2xl">{item.icon}</span>
+                      <div>
+                        <p className="font-medium">{item.label}</p>
+                        <p className="text-sm text-gray-500">{item.description}</p>
+                      </div>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          {/* Footer */}
+          <div className="p-4 border-t border-gray-200">
+            <p className="text-xs text-gray-500 text-center">
+              Curiow Dashboard v1.0
+            </p>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 overflow-auto">
+          {renderActiveView()}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AdminDashboard;
