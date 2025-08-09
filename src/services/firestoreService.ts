@@ -14,8 +14,9 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Gem, Channel, User, SavedList, UserQuestion, UserRole, TopicSuggestion } from '../types';
+import { Gem, Channel, User, SavedList, UserQuestion, UserRole, TopicSuggestion, ListWithItems } from '../types';
 import { getDefaultPermissions } from './roleService';
+import * as listService from './listService';
 
 // --- Fetch Operations ---
 
@@ -214,3 +215,148 @@ export const promoteUserRole = async (userId: string, newRole: UserRole): Promis
         updatedAt: new Date()
     });
 };
+
+// --- Nuove funzioni per gestione liste (con retrocompatibilità) ---
+
+export const fetchUserListsNew = async (uid: string): Promise<ListWithItems[]> => {
+    try {
+        // Prima prova a caricare le liste dalla nuova struttura
+        const newLists = await listService.fetchUserLists(uid);
+
+        if (newLists.length > 0) {
+            console.log('Found lists in new structure:', newLists.length);
+            return newLists;
+        }
+
+        // Se non ci sono liste nella nuova struttura, controlla le vecchie
+        const oldLists = await fetchUserSavedLists(uid);
+        console.log('Found old lists:', oldLists.length);
+
+        if (oldLists.length > 0) {
+            // Converti le vecchie liste nel formato nuovo per compatibilità UI
+            const convertedLists = oldLists.map(oldList => ({
+                id: oldList.id,
+                name: oldList.name,
+                isPublic: false,
+                createdBy: uid,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                gemIds: oldList.gemIds,
+                itemCount: oldList.gemIds.length,
+                userRole: 'owner' as const
+            }));
+
+            console.log('Converted old lists to new format:', convertedLists);
+            return convertedLists;
+        }
+
+        // Se non ci sono liste né vecchie né nuove, ritorna array vuoto
+        console.log('No lists found for user:', uid);
+        return [];
+    } catch (error) {
+        console.error("Error fetching user lists:", error);
+        return [];
+    }
+};
+
+export const migrateUserToNewListStructure = async (uid: string): Promise<boolean> => {
+    try {
+        console.log('Starting migration for user:', uid);
+
+        // Verifica se l'utente ha già liste nella nuova struttura
+        const existingNewLists = await listService.fetchUserLists(uid);
+        console.log('Existing new lists found:', existingNewLists.length);
+
+        if (existingNewLists.length > 0) {
+            console.log('User already migrated, skipping migration');
+            return true; // Già migrato
+        }
+
+        // Ottieni le vecchie liste
+        const oldLists = await fetchUserSavedLists(uid);
+        console.log('Old lists found:', oldLists.length, oldLists);
+
+        if (oldLists.length === 0) {
+            console.log('No old lists found, creating default favorites list');
+            // Crea una lista preferiti di default nella nuova struttura
+            await listService.createList('Preferiti', uid, 'I tuoi contenuti preferiti', false, '#3B82F6', '❤️');
+            console.log('Default favorites list created');
+            return true;
+        }
+
+        console.log('Migrating old lists to new structure...');
+        // Migra le vecchie liste
+        await listService.migrateUserLists(uid, oldLists);
+        console.log('Migration completed successfully');
+
+        // Rimuovi le vecchie liste dal documento utente solo dopo migrazione riuscita
+        await updateDoc(doc(db, 'users', uid), {
+            savedLists: [],
+            migratedToNewLists: true,
+            migratedAt: new Date()
+        });
+        console.log('Old lists cleared from user document');
+
+        return true;
+    } catch (error) {
+        console.error("Error migrating user lists:", error);
+        return false;
+    }
+};
+
+// Funzioni wrapper per compatibilità con l'UI esistente
+export const createNewList = async (uid: string, name: string): Promise<string> => {
+    return await listService.createList(name, uid);
+};
+
+export const addGemToUserList = async (uid: string, listId: string, gemId: string): Promise<void> => {
+    // Prima verifica se è una lista vecchia o nuova
+    const newLists = await listService.fetchUserLists(uid);
+    const isNewList = newLists.some(list => list.id === listId);
+
+    if (isNewList) {
+        await listService.addGemToList(listId, gemId, uid);
+    } else {
+        // Gestisci le vecchie liste (retrocompatibilità durante migrazione)
+        const oldLists = await fetchUserSavedLists(uid);
+        const listIndex = oldLists.findIndex(list => list.id === listId);
+
+        if (listIndex !== -1 && !oldLists[listIndex].gemIds.includes(gemId)) {
+            oldLists[listIndex].gemIds.push(gemId);
+            await updateUserSavedLists(uid, oldLists);
+        }
+    }
+};
+
+export const removeGemFromUserList = async (uid: string, listId: string, gemId: string): Promise<void> => {
+    // Prima verifica se è una lista vecchia o nuova
+    const newLists = await listService.fetchUserLists(uid);
+    const isNewList = newLists.some(list => list.id === listId);
+
+    if (isNewList) {
+        await listService.removeGemFromList(listId, gemId);
+    } else {
+        // Gestisci le vecchie liste (retrocompatibilità durante migrazione)
+        const oldLists = await fetchUserSavedLists(uid);
+        const listIndex = oldLists.findIndex(list => list.id === listId);
+
+        if (listIndex !== -1) {
+            oldLists[listIndex].gemIds = oldLists[listIndex].gemIds.filter(id => id !== gemId);
+            await updateUserSavedLists(uid, oldLists);
+        }
+    }
+};
+
+// Esporta le funzioni del nuovo servizio liste per uso diretto
+export const {
+    createList,
+    addGemToList,
+    removeGemFromList,
+    fetchUserLists,
+    fetchListById,
+    updateList,
+    deleteList,
+    addMemberToList,
+    removeMemberFromList,
+    checkGemInList
+} = listService;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Gem, User, SavedList, Channel, Filter, Topic } from './types';
+import { Gem, User, SavedList, Channel, Filter, Topic, ListWithItems } from './types';
 import { TOPICS } from './constants';
 import { auth } from './services/firebase';
 import { onAuthStateChanged, User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
@@ -26,8 +26,9 @@ const App: React.FC = () => {
   
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [savedLists, setSavedLists] = useState<SavedList[]>([]);
-  
+  const [userLists, setUserLists] = useState<ListWithItems[]>([]);
+  const [isMigrated, setIsMigrated] = useState(false);
+
   const [filter, setFilter] = useState<Filter>({ type: 'all' });
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentView, setCurrentView] = useState<View>('feed');
@@ -70,16 +71,24 @@ const App: React.FC = () => {
                   console.log('Created new user profile:', userProfile);
               }
 
-              const userLists = await firestoreService.fetchUserSavedLists(currentUser.uid);
+              // Migrazione automatica alle nuove liste
+              console.log('Attempting migration to new list structure...');
+              const migrationSuccess = await firestoreService.migrateUserToNewListStructure(currentUser.uid);
+              setIsMigrated(migrationSuccess);
+
+              // Carica le liste con la nuova struttura
+              const newUserLists = await firestoreService.fetchUserListsNew(currentUser.uid);
               setUser(userProfile);
-              setSavedLists(userLists);
+              setUserLists(newUserLists);
               setShowLoginModal(false);
 
-              console.log('Final user state set:', userProfile);
+              console.log('Migration completed:', migrationSuccess);
+              console.log('Loaded user lists:', newUserLists);
           } else {
               // User is signed out
               setUser(null);
-              setSavedLists([]);
+              setUserLists([]);
+              setIsMigrated(false);
               setFilter({ type: 'all' });
               setCurrentView('feed');
           }
@@ -124,57 +133,122 @@ const App: React.FC = () => {
   }
 
   const allFavoriteIds = useMemo(() => {
-    return Array.from(new Set(savedLists.flatMap(list => list.gemIds)));
-  }, [savedLists]);
+    return Array.from(new Set(userLists.flatMap(list => list.gemIds)));
+  }, [userLists]);
 
   const handleSaveRequest = (gemId: string) => {
     setGemToSaveId(gemId);
     setIsSaveModalOpen(true);
   };
 
-  const updateSavedLists = async (newLists: SavedList[]) => {
+  // Aggiorna le liste dell'utente con la nuova struttura
+  const updateUserLists = async (updatedLists: ListWithItems[]) => {
       if (!firebaseUser) return;
-      setSavedLists(newLists);
-      await firestoreService.updateUserSavedLists(firebaseUser.uid, newLists);
-  }
+      setUserLists(updatedLists);
+      // Non serve più salvare nel documento utente, le liste sono in collezioni separate
+  };
 
-  const handleSaveToList = (listId: string) => {
-    if (!gemToSaveId) return;
-    const newLists = savedLists.map(list => {
-        if (list.id === listId) {
-            if (!list.gemIds.includes(gemToSaveId)) {
-                return { ...list, gemIds: [...list.gemIds, gemToSaveId] };
-            }
+  const handleSaveToList = async (listId: string) => {
+    if (!gemToSaveId || !firebaseUser) return;
+
+    try {
+      await firestoreService.addGemToUserList(firebaseUser.uid, listId, gemToSaveId);
+
+      // Aggiorna lo stato locale
+      const updatedLists = userLists.map(list => {
+        if (list.id === listId && !list.gemIds.includes(gemToSaveId)) {
+          return {
+            ...list,
+            gemIds: [...list.gemIds, gemToSaveId],
+            itemCount: list.itemCount + 1,
+            updatedAt: new Date()
+          };
         }
         return list;
-    });
-    updateSavedLists(newLists);
+      });
+      setUserLists(updatedLists);
+    } catch (error) {
+      console.error('Error saving to list:', error);
+      alert('Errore nel salvare nella lista');
+    }
   };
   
-  const handleCreateListAndSave = (listName: string) => {
-      if(!gemToSaveId) return;
-      const newList: SavedList = {
-          id: self.crypto.randomUUID(),
+  const handleCreateListAndSave = async (listName: string) => {
+      if (!gemToSaveId || !firebaseUser) return;
+
+      try {
+        const newListId = await firestoreService.createNewList(firebaseUser.uid, listName);
+        await firestoreService.addGemToUserList(firebaseUser.uid, newListId, gemToSaveId);
+
+        // Aggiungi la nuova lista allo stato locale
+        const newList: ListWithItems = {
+          id: newListId,
           name: listName,
-          gemIds: [gemToSaveId]
-      };
-      updateSavedLists([...savedLists, newList]);
-  }
-  
-  const handleToggleFavorite = (gemId: string) => {
-    const isFav = allFavoriteIds.includes(gemId);
-    let newLists;
-    if(isFav) {
-        newLists = savedLists.map(list => ({
-            ...list,
-            gemIds: list.gemIds.filter(id => id !== gemId)
-        }));
-    } else {
-        newLists = savedLists.map(list => 
-            list.id === 'default' ? { ...list, gemIds: [...list.gemIds, gemId]} : list
-        );
+          isPublic: false,
+          createdBy: firebaseUser.uid,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          gemIds: [gemToSaveId],
+          itemCount: 1,
+          userRole: 'owner'
+        };
+        setUserLists([...userLists, newList]);
+      } catch (error) {
+        console.error('Error creating list and saving:', error);
+        alert('Errore nella creazione della lista');
+      }
+  };
+
+  // Crea una nuova lista tramite il servizio e ricarica le liste
+  const handleCreateNewList = async (listName: string) => {
+    if (!firebaseUser) return;
+
+    try {
+      await firestoreService.createNewList(firebaseUser.uid, listName);
+
+      // Ricarica le liste dopo la creazione
+      const updatedLists = await firestoreService.fetchUserListsNew(firebaseUser.uid);
+      setUserLists(updatedLists);
+    } catch (error) {
+      console.error('Error creating new list:', error);
+      throw error; // Rilancia l'errore per gestirlo nel componente
     }
-    updateSavedLists(newLists);
+  };
+
+  const handleToggleFavorite = async (gemId: string) => {
+    if (!firebaseUser) return;
+
+    const favoritesList = userLists.find(list => list.name === 'Preferiti' || list.id === 'default');
+    if (!favoritesList) return;
+
+    const isFav = favoritesList.gemIds.includes(gemId);
+
+    try {
+      if (isFav) {
+        await firestoreService.removeGemFromUserList(firebaseUser.uid, favoritesList.id, gemId);
+      } else {
+        await firestoreService.addGemToUserList(firebaseUser.uid, favoritesList.id, gemId);
+      }
+
+      // Aggiorna lo stato locale
+      const updatedLists = userLists.map(list => {
+        if (list.id === favoritesList.id) {
+          return {
+            ...list,
+            gemIds: isFav
+              ? list.gemIds.filter(id => id !== gemId)
+              : [...list.gemIds, gemId],
+            itemCount: isFav ? list.itemCount - 1 : list.itemCount + 1,
+            updatedAt: new Date()
+          };
+        }
+        return list;
+      });
+      setUserLists(updatedLists);
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      alert('Errore nel modificare i preferiti');
+    }
   };
   
   const handleAddUserQuestion = async (gemId: string, question: string) => {
@@ -292,12 +366,13 @@ const App: React.FC = () => {
             return firebaseUser ? <SavedView 
                         allGems={gems} 
                         allFavoriteIds={allFavoriteIds}
-                        savedLists={savedLists} 
-                        onUpdateLists={updateSavedLists}
+                        savedLists={userLists}
+                        onUpdateLists={updateUserLists}
                         onSelectGem={handleSelectGem}
                         onToggleFavorite={handleToggleFavorite}
                         onLoginRequest={handleLoginRequest}
                         onBack={() => handleNavigate('feed')}
+                        onCreateList={handleCreateNewList}
                     /> : renderFeed();
         case 'profile':
             return firebaseUser && user ? <ProfileView user={user} onUpdateUser={handleUpdateUser} onBack={() => handleNavigate('feed')} onNavigate={handleNavigate} /> : renderFeed();
@@ -333,12 +408,12 @@ const App: React.FC = () => {
             <SaveToListModal
                 isOpen={isSaveModalOpen}
                 onClose={() => setIsSaveModalOpen(false)}
-                lists={savedLists.filter(l => l.id !== 'default')}
+                lists={userLists.filter(l => l.id !== 'default')}
                 gemId={gemToSaveId}
                 onSaveToList={handleSaveToList}
                 onCreateAndSave={handleCreateListAndSave}
                 onToggleDefaultFavorite={handleToggleFavorite}
-                isSavedToDefault={savedLists.find(l=>l.id==='default')?.gemIds.includes(gemToSaveId) ?? false}
+                isSavedToDefault={userLists.find(l=>l.id==='default')?.gemIds.includes(gemToSaveId) ?? false}
             />
         )}
     </div>

@@ -59,14 +59,50 @@ export interface SavedList {
     gemIds: string[];
 }
 
-export interface User {
-  firstName: string;
-  lastName: string;
-  email: string;
-  role: UserRole;
-  permissions: UserPermissions;
-  createdAt: Date;
-  lastLoginAt?: Date;
+// Nuovi tipi per la struttura ristrutturata
+export interface List {
+    id: string;
+    name: string;
+    description?: string;
+    isPublic: boolean;
+    createdBy: string; // userId
+    createdAt: Date;
+    updatedAt: Date;
+    color?: string; // Per personalizzazione UI futura
+    icon?: string; // Emoji o icona
+}
+
+export interface ListItem {
+    id: string;
+    listId: string;
+    gemId: string;
+    addedBy: string; // userId
+    addedAt: Date;
+    order?: number; // Per ordinamento personalizzato
+}
+
+export interface ListMember {
+    id: string;
+    listId: string;
+    userId: string;
+    role: 'owner' | 'editor' | 'viewer';
+    joinedAt: Date;
+}
+
+// Tipo per le viste aggregate (per compatibilità con UI esistente)
+export interface ListWithItems {
+    id: string;
+    name: string;
+    description?: string;
+    isPublic: boolean;
+    createdBy: string;
+    createdAt: Date;
+    updatedAt: Date;
+    color?: string;
+    icon?: string;
+    gemIds: string[];
+    itemCount: number;
+    userRole?: 'owner' | 'editor' | 'viewer';
 }
 
 export type Filter = 

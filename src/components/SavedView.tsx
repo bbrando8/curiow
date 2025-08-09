@@ -1,34 +1,35 @@
 import React, { useState } from 'react';
-import { SavedList, Gem } from '../types';
+import { ListWithItems, Gem } from '../types';
 import { ChevronLeftIcon, PlusCircleIcon } from './icons';
 import GemCard from './GemCard';
 
 interface SavedViewProps {
     allGems: Gem[];
     allFavoriteIds: string[];
-    savedLists: SavedList[];
-    onUpdateLists: (lists: SavedList[]) => void;
+    savedLists: ListWithItems[];
+    onUpdateLists: (lists: ListWithItems[]) => void;
     onSelectGem: (gemId: string) => void;
     onToggleFavorite: (gemId: string) => void;
     onLoginRequest: () => void;
     onBack: () => void;
+    onCreateList: (listName: string) => Promise<void>; // Nuova prop per creare liste
 }
 
-const SavedView: React.FC<SavedViewProps> = ({ allGems, allFavoriteIds, savedLists, onUpdateLists, onSelectGem, onToggleFavorite, onLoginRequest, onBack }) => {
+const SavedView: React.FC<SavedViewProps> = ({ allGems, allFavoriteIds, savedLists, onUpdateLists, onSelectGem, onToggleFavorite, onLoginRequest, onBack, onCreateList }) => {
     const [newListName, setNewListName] = useState('');
     const userLists = savedLists.filter(l => l.id !== 'default');
-    const [selectedListId, setSelectedListId] = useState<string | 'all'>('all');
+    const [selectedListId, setSelectedListId] = useState<string>('all');
 
-    const handleCreateList = (e: React.FormEvent) => {
+    const handleCreateList = async (e: React.FormEvent) => {
         e.preventDefault();
         if (newListName.trim()) {
-            const newList: SavedList = {
-                id: self.crypto.randomUUID(),
-                name: newListName.trim(),
-                gemIds: [],
-            };
-            onUpdateLists([newList, ...savedLists]);
-            setNewListName('');
+            try {
+                await onCreateList(newListName.trim()); // Usa solo il servizio
+                setNewListName('');
+            } catch (error) {
+                console.error('Error creating list:', error);
+                alert('Errore nella creazione della lista');
+            }
         }
     };
     
