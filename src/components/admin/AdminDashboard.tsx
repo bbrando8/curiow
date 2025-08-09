@@ -47,15 +47,48 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose })
   );
 
   const renderActiveView = () => {
+    if (!currentUser) return null;
+
+    // Converti currentUser nel formato che si aspetta ProfileView
+    const userForProfileView: User = {
+      firstName: currentUser.firstName,
+      lastName: currentUser.lastName,
+      email: currentUser.email,
+      role: currentUser.role,
+      permissions: currentUser.permissions,
+      createdAt: currentUser.createdAt,
+      lastLoginAt: currentUser.lastLoginAt
+    };
+
     switch (activeView) {
       case 'profile':
-        return <ProfileView currentUser={currentUser} />;
+        return (
+          <ProfileView
+            user={userForProfileView}
+            onUpdateUser={(updatedUser) => {
+              // TODO: Implementare aggiornamento utente nel dashboard
+              console.log('Aggiornamento utente nel dashboard:', updatedUser);
+            }}
+            onBack={() => setActiveView('profile')} // Rimane sulla stessa vista
+            onNavigate={() => {}} // Non naviga fuori dal dashboard
+          />
+        );
       case 'users':
-        return permissions.isAdmin ? <UserManagement currentUser={currentUser} /> : null;
+        return permissions.isAdmin ? (
+          <UserManagement
+            currentUser={currentUser}
+            onBack={() => setActiveView('users')} // Rimane nel dashboard
+          />
+        ) : null;
       case 'topics':
-        return permissions.isAdmin ? <TopicManagement currentUser={currentUser} /> : null;
+        return permissions.isAdmin ? (
+          <TopicManagement
+            currentUser={currentUser}
+            onBack={() => setActiveView('topics')} // Rimane nel dashboard
+          />
+        ) : null;
       default:
-        return <ProfileView currentUser={currentUser} />;
+        return null;
     }
   };
 

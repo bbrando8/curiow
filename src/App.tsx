@@ -14,6 +14,8 @@ import AdminDashboard from './components/admin/AdminDashboard';
 import TopicManagement from './components/admin/TopicManagement';
 import { SparklesIcon } from './components/icons';
 import SaveToListModal from './components/SaveToListModal';
+// Import admin utils in development
+import './utils/adminUtils';
 
 type View = 'feed' | 'detail' | 'saved' | 'profile' | 'dashboard' | 'topics';
 
@@ -52,9 +54,12 @@ const App: React.FC = () => {
   // Auth state listener
   useEffect(() => {
       const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+          console.log('Auth state changed - currentUser:', currentUser?.uid);
           setFirebaseUser(currentUser);
           if (currentUser) {
               let userProfile = await firestoreService.fetchUserProfile(currentUser.uid);
+              console.log('Fetched user profile:', userProfile);
+
               // Se il profilo non esiste, creane uno nuovo. Utile per utenti già esistenti in Auth ma non in Firestore.
               if (!userProfile) {
                   console.log(`Creating new profile for user ${currentUser.uid}`);
@@ -62,12 +67,15 @@ const App: React.FC = () => {
                   const [firstName, lastName] = email.split('@')[0].split('.') || [email, ''];
                   await firestoreService.createUserProfile(currentUser.uid, email, firstName, lastName || '');
                   userProfile = await firestoreService.fetchUserProfile(currentUser.uid);
+                  console.log('Created new user profile:', userProfile);
               }
 
               const userLists = await firestoreService.fetchUserSavedLists(currentUser.uid);
               setUser(userProfile);
               setSavedLists(userLists);
               setShowLoginModal(false);
+
+              console.log('Final user state set:', userProfile);
           } else {
               // User is signed out
               setUser(null);
@@ -226,6 +234,7 @@ const App: React.FC = () => {
     <>
         <Header
             isLoggedIn={!!firebaseUser}
+            user={user}
             onLogin={() => setShowLoginModal(true)}
             onLogout={handleLogout}
             selectedFilter={filter}

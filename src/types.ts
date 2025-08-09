@@ -18,6 +18,7 @@ export interface UserPermissions {
   canDeleteGems: boolean;
   canManageUsers: boolean;
   canModerateContent: boolean;
+  canViewDashboard: boolean;
 }
 
 export interface UserQuestion {

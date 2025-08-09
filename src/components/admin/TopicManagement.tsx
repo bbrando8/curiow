@@ -14,15 +14,77 @@ interface TopicManagementProps {
   onBack: () => void;
 }
 
+// Modal di conferma per cambio stato
+interface ConfirmationModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  action: string;
+}
+
+const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
+  isOpen, onClose, onConfirm, title, message, action
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
+        <p className="text-gray-600 mb-6">{message}</p>
+        <div className="flex justify-end space-x-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+          >
+            Annulla
+          </button>
+          <button
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            {action}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }) => {
   const [topics, setTopics] = useState<TopicSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTopic, setEditingTopic] = useState<TopicSuggestion | null>(null);
+
+  // Filtri e ricerca
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'converted'>('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [textSearch, setTextSearch] = useState('');
+  const [tagSearch, setTagSearch] = useState('');
+
+  // Paginazione
   const [currentPage, setCurrentPage] = useState(1);
-  const [topicsPerPage] = useState(8);
+  const [topicsPerPage, setTopicsPerPage] = useState(10);
+
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    action: () => void;
+    title: string;
+    message: string;
+    actionText: string;
+  }>({
+    isOpen: false,
+    action: () => {},
+    title: '',
+    message: '',
+    actionText: ''
+  });
 
   // Form state
   const [formData, setFormData] = useState({
@@ -33,9 +95,7 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
   const permissions = useUserPermissions(currentUser);
 
   useEffect(() => {
-    if (!permissions.isAdmin) {
-      return;
-    }
+    if (!permissions.isAdmin) return;
     loadTopics();
   }, [statusFilter, permissions.isAdmin]);
 
@@ -52,6 +112,54 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
     setLoading(false);
   };
 
+  const showConfirmation = (title: string, message: string, action: () => void, actionText: string) => {
+    setConfirmModal({
+      isOpen: true,
+      action,
+      title,
+      message,
+      actionText
+    });
+  };
+
+  const handleStatusChange = async (topicId: string, newStatus: 'pending' | 'approved' | 'converted') => {
+    const statusLabels = {
+      pending: 'In attesa',
+      approved: 'Approvato',
+      converted: 'Convertito'
+    };
+
+    showConfirmation(
+      'Conferma cambio stato',
+      `Sei sicuro di voler cambiare lo stato dell'argomento a "${statusLabels[newStatus]}"?`,
+      async () => {
+        try {
+          await updateTopicSuggestion(topicId, { status: newStatus });
+          await loadTopics();
+        } catch (error) {
+          console.error('Errore nel cambio status:', error);
+        }
+      },
+      'Conferma'
+    );
+  };
+
+  const handleDelete = (topicId: string) => {
+    showConfirmation(
+      'Conferma eliminazione',
+      'Sei sicuro di voler eliminare questo argomento? Questa azione non può essere annullata.',
+      async () => {
+        try {
+          await deleteTopicSuggestion(topicId);
+          await loadTopics();
+        } catch (error) {
+          console.error('Errore nell\'eliminazione:', error);
+        }
+      },
+      'Elimina'
+    );
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser?.uid) return;
@@ -62,10 +170,8 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
       setFormData({ text: '', tags: '' });
       setShowCreateModal(false);
       await loadTopics();
-      alert('Argomento creato con successo!');
     } catch (error) {
       console.error('Errore nella creazione:', error);
-      alert('Errore nella creazione dell\'argomento');
     }
   };
 
@@ -82,34 +188,8 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
       setFormData({ text: '', tags: '' });
       setEditingTopic(null);
       await loadTopics();
-      alert('Argomento aggiornato con successo!');
     } catch (error) {
       console.error('Errore nell\'aggiornamento:', error);
-      alert('Errore nell\'aggiornamento dell\'argomento');
-    }
-  };
-
-  const handleStatusChange = async (topicId: string, newStatus: 'pending' | 'approved' | 'converted') => {
-    try {
-      await updateTopicSuggestion(topicId, { status: newStatus });
-      await loadTopics();
-      alert(`Status cambiato a ${newStatus} con successo!`);
-    } catch (error) {
-      console.error('Errore nel cambio status:', error);
-      alert('Errore nel cambio status');
-    }
-  };
-
-  const handleDelete = async (topicId: string) => {
-    if (window.confirm('Sei sicuro di voler eliminare questo argomento?')) {
-      try {
-        await deleteTopicSuggestion(topicId);
-        await loadTopics();
-        alert('Argomento eliminato con successo!');
-      } catch (error) {
-        console.error('Errore nell\'eliminazione:', error);
-        alert('Errore nell\'eliminazione dell\'argomento');
-      }
     }
   };
 
@@ -127,11 +207,14 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
     setShowCreateModal(false);
   };
 
-  // Filtro per ricerca
-  const filteredTopics = topics.filter(topic =>
-    topic.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    topic.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Filtro combinato per ricerca
+  const filteredTopics = topics.filter(topic => {
+    const matchesText = topic.text.toLowerCase().includes(textSearch.toLowerCase());
+    const matchesTag = tagSearch === '' || topic.tags.some(tag =>
+      tag.toLowerCase().includes(tagSearch.toLowerCase())
+    );
+    return matchesText && matchesTag;
+  });
 
   // Paginazione
   const indexOfLastTopic = currentPage * topicsPerPage;
@@ -139,12 +222,17 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
   const currentTopics = filteredTopics.slice(indexOfFirstTopic, indexOfLastTopic);
   const totalPages = Math.ceil(filteredTopics.length / topicsPerPage);
 
+  // Reset pagina quando cambiano i filtri
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [textSearch, tagSearch, statusFilter, topicsPerPage]);
+
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'approved': return 'bg-green-100 text-green-800';
-      case 'converted': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'approved': return 'bg-green-100 text-green-800 border-green-200';
+      case 'converted': return 'bg-blue-100 text-blue-800 border-blue-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
@@ -154,6 +242,29 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
       case 'approved': return '✅';
       case 'converted': return '💎';
       default: return '❓';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending': return 'In attesa';
+      case 'approved': return 'Approvato';
+      case 'converted': return 'Convertito in gemma';
+      default: return status;
+    }
+  };
+
+  const formatDate = (date: any) => {
+    try {
+      // Gestisce sia Timestamp di Firestore che Date JavaScript
+      const dateObj = date?.toDate ? date.toDate() : new Date(date);
+      return dateObj.toLocaleDateString('it-IT', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch (error) {
+      return 'Data non valida';
     }
   };
 
@@ -182,41 +293,6 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
       </header>
 
       <div className="px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <p className="mt-2 text-gray-600">Crea e gestisci gli argomenti che diventeranno gemme</p>
-        </div>
-
-        {/* Filtri e Azioni */}
-        <div className="mb-6 flex flex-col sm:flex-row gap-4">
-          <div className="flex-1">
-            <input
-              type="text"
-              placeholder="Cerca argomenti o tag..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">Tutti gli stati</option>
-            <option value="pending">In attesa</option>
-            <option value="approved">Approvati</option>
-            <option value="converted">Convertiti</option>
-          </select>
-
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            + Nuovo Argomento
-          </button>
-        </div>
-
         {/* Statistiche */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white p-4 rounded-lg shadow border">
@@ -237,104 +313,225 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
           </div>
         </div>
 
-        {/* Griglia Argomenti */}
+        {/* Filtri e ricerca */}
+        <div className="bg-white rounded-lg shadow border p-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ricerca nel testo</label>
+              <input
+                type="text"
+                placeholder="Cerca negli argomenti..."
+                value={textSearch}
+                onChange={(e) => setTextSearch(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ricerca nei tag</label>
+              <input
+                type="text"
+                placeholder="Cerca per tag..."
+                value={tagSearch}
+                onChange={(e) => setTagSearch(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Filtra per stato</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">Tutti gli stati</option>
+                <option value="pending">In attesa</option>
+                <option value="approved">Approvati</option>
+                <option value="converted">Convertiti</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Elementi per pagina</label>
+              <select
+                value={topicsPerPage}
+                onChange={(e) => setTopicsPerPage(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            <div className="flex items-end">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                + Nuovo Argomento
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabella */}
         {loading ? (
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             <span className="ml-3 text-gray-600">Caricamento argomenti...</span>
           </div>
         ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-              {currentTopics.map((topic) => (
-                <div key={topic.id} className="bg-white rounded-lg shadow border p-6 hover:shadow-lg transition-shadow">
-                  <div className="flex items-start justify-between mb-3">
-                    <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(topic.status)}`}>
-                      {getStatusEmoji(topic.status)} {topic.status}
-                    </span>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => openEditModal(topic)}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        onClick={() => handleDelete(topic.id)}
-                        className="text-red-600 hover:text-red-800 text-sm"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
+          <div className="bg-white rounded-lg shadow border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Argomento
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Tag
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Stato
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Data creazione
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Azioni
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {currentTopics.map((topic) => (
+                    <tr key={topic.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-900 max-w-md">
+                          {topic.text}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-wrap gap-1">
+                          {topic.tags.slice(0, 3).map((tag, index) => (
+                            <span key={index} className="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded">
+                              #{tag}
+                            </span>
+                          ))}
+                          {topic.tags.length > 3 && (
+                            <span className="text-xs text-gray-500">+{topic.tags.length - 3}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full border ${getStatusBadgeColor(topic.status)}`}>
+                          {getStatusEmoji(topic.status)} {topic.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {formatDate(topic.createdAt)}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end space-x-2">
+                          {/* Dropdown per cambio stato */}
+                          <select
+                            value={topic.status}
+                            onChange={(e) => handleStatusChange(topic.id, e.target.value as any)}
+                            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+                          >
+                            <option value="pending">⏳ In attesa</option>
+                            <option value="approved">✅ Approvato</option>
+                            <option value="converted">💎 Convertito</option>
+                          </select>
 
-                  <h3 className="text-lg font-medium text-gray-900 mb-3 line-clamp-3">
-                    {topic.text}
-                  </h3>
+                          <button
+                            onClick={() => openEditModal(topic)}
+                            className="text-blue-600 hover:text-blue-800 text-sm px-2 py-1 rounded hover:bg-blue-50"
+                            title="Modifica"
+                          >
+                            ✏️
+                          </button>
 
-                  <div className="flex flex-wrap gap-1 mb-4">
-                    {topic.tags.map((tag, index) => (
-                      <span key={index} className="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded">
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="text-xs text-gray-500 mb-4">
-                    Creato il {new Date(topic.createdAt).toLocaleDateString('it-IT')}
-                  </div>
-
-                  {/* Cambio Status */}
-                  <select
-                    value={topic.status}
-                    onChange={(e) => handleStatusChange(topic.id, e.target.value as any)}
-                    className="w-full text-xs border border-gray-300 rounded px-2 py-1"
-                  >
-                    <option value="pending">⏳ In attesa</option>
-                    <option value="approved">✅ Approvato</option>
-                    <option value="converted">💎 Convertito</option>
-                  </select>
-                </div>
-              ))}
+                          <button
+                            onClick={() => handleDelete(topic.id)}
+                            className="text-red-600 hover:text-red-800 text-sm px-2 py-1 rounded hover:bg-red-50"
+                            title="Elimina"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
             {/* Paginazione */}
             {totalPages > 1 && (
-              <div className="flex justify-center items-center space-x-2">
-                <button
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1}
-                  className="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                >
-                  ← Precedente
-                </button>
-
-                <div className="flex space-x-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`px-3 py-2 rounded-md text-sm ${
-                        page === currentPage
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
+              <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200">
+                <div className="flex-1 flex justify-between sm:hidden">
+                  <button
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Precedente
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Successivo
+                  </button>
                 </div>
-
-                <button
-                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Successivo →
-                </button>
+                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-gray-700">
+                      Mostrando <span className="font-medium">{indexOfFirstTopic + 1}</span> a{' '}
+                      <span className="font-medium">{Math.min(indexOfLastTopic, filteredTopics.length)}</span> di{' '}
+                      <span className="font-medium">{filteredTopics.length}</span> risultati
+                    </p>
+                  </div>
+                  <div>
+                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                      <button
+                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        ←
+                      </button>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                            page === currentPage
+                              ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                        disabled={currentPage === totalPages}
+                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        →
+                      </button>
+                    </nav>
+                  </div>
+                </div>
               </div>
             )}
-          </>
+          </div>
         )}
 
         {/* Modal Creazione/Modifica */}
@@ -397,6 +594,16 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
             </div>
           </div>
         )}
+
+        {/* Modal di conferma */}
+        <ConfirmationModal
+          isOpen={confirmModal.isOpen}
+          onClose={() => setConfirmModal({...confirmModal, isOpen: false})}
+          onConfirm={confirmModal.action}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          action={confirmModal.actionText}
+        />
       </div>
     </div>
   );

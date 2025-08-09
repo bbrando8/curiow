@@ -1,5 +1,6 @@
-import { collection, addDoc } from 'firebase/firestore';
-import { db } from './src/services/firebase.js';
+import { collection, addDoc, setDoc, doc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { db, auth } from './src/services/firebase.js';
 import { Gem, Channel, Topic, Source, User, UserRole, TopicSuggestion } from './src/types.js';
 import { getDefaultPermissions } from './src/services/roleService.js';
 
@@ -287,14 +288,61 @@ async function seedDatabase() {
         }
         console.log(`🎉 ${sampleTopicSuggestions.length} argomenti caricati con successo.`);
 
-        // Seed Users
-        console.log("\n👥 Caricamento utenti di esempio...");
-        const usersCollection = collection(db, 'users');
-        for (const user of sampleUsers) {
-            await addDoc(usersCollection, user);
-            console.log(`✅ Utente "${user.firstName} ${user.lastName}" (${user.role}) aggiunto.`);
+        // Seed Users - Crea account di autenticazione E profili Firestore
+        console.log("\n👥 Caricamento utenti con account di autenticazione...");
+
+        // Utenti che devono avere account di autenticazione reali
+        const usersWithAuth = [
+            {
+                email: "brando.baldassarre@gmail.com",
+                password: "Jime1987$", // Cambia con una password sicura
+                userData: sampleUsers[0]
+            },
+            {
+                email: "mjimenah@gmail.com",
+                password: "Brando88$",
+                userData: sampleUsers[1]
+            },
+            {
+                email: "ilbrando88@gmail.com",
+                password: "Jime1987$",
+                userData: sampleUsers[2]
+            }
+        ];
+
+        for (const userWithAuth of usersWithAuth) {
+            try {
+                // 1. Crea l'account di autenticazione
+                console.log(`📝 Creando account di autenticazione per ${userWithAuth.email}...`);
+                const userCredential = await createUserWithEmailAndPassword(
+                    auth,
+                    userWithAuth.email,
+                    userWithAuth.password
+                );
+
+                const uid = userCredential.user.uid;
+                console.log(`✅ Account creato con UID: ${uid}`);
+
+                // 2. Crea il profilo in Firestore usando l'UID reale
+                const userDocRef = doc(db, 'users', uid);
+                await setDoc(userDocRef, {
+                    ...userWithAuth.userData,
+                    createdAt: new Date(),
+                    lastLoginAt: new Date()
+                });
+
+                console.log(`✅ Profilo "${userWithAuth.userData.firstName} ${userWithAuth.userData.lastName}" (${userWithAuth.userData.role}) creato con UID: ${uid}`);
+
+            } catch (error: any) {
+                if (error.code === 'auth/email-already-in-use') {
+                    console.log(`⚠️  Account ${userWithAuth.email} già esistente, saltando...`);
+                } else {
+                    console.error(`❌ Errore creando utente ${userWithAuth.email}:`, error.message);
+                }
+            }
         }
-        console.log(`🎉 ${sampleUsers.length} utenti caricati con successo.`);
+
+        console.log(`🎉 Utenti con autenticazione processati con successo.`);
 
         console.log("\n🚀 Seeding completato! Il tuo database ora contiene:");
         console.log(`   • ${sampleChannels.length} canali tematici`);

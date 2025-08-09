@@ -12,6 +12,7 @@ export const getDefaultPermissions = (role: UserRole): UserPermissions => {
         canDeleteGems: true,
         canManageUsers: true,
         canModerateContent: true,
+        canViewDashboard: true,
       };
 
     case UserRole.MODERATOR:
@@ -21,6 +22,7 @@ export const getDefaultPermissions = (role: UserRole): UserPermissions => {
         canDeleteGems: false,
         canManageUsers: false,
         canModerateContent: true,
+        canViewDashboard: true,
       };
 
     case UserRole.USER:
@@ -31,6 +33,7 @@ export const getDefaultPermissions = (role: UserRole): UserPermissions => {
         canDeleteGems: false,
         canManageUsers: false,
         canModerateContent: false,
+        canViewDashboard: false,
       };
   }
 };
