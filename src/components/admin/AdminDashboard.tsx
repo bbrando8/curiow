@@ -4,13 +4,14 @@ import { useUserPermissions } from '../../services/roleService';
 import ProfileView from '../ProfileView';
 import UserManagement from './UserManagement';
 import TopicManagement from './TopicManagement';
+import FeedbackManagement from './FeedbackManagement';
 
 interface AdminDashboardProps {
   currentUser: User & { id: string } | null;
   onClose: () => void;
 }
 
-type DashboardView = 'profile' | 'users' | 'topics';
+type DashboardView = 'profile' | 'users' | 'topics' | 'feedback';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose }) => {
   const [activeView, setActiveView] = useState<DashboardView>('profile');
@@ -37,6 +38,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose })
       label: 'Gestione Utenti',
       icon: '👥',
       description: 'Gestisci ruoli e permessi degli utenti',
+      allowedForAll: false,
+      requiresAdmin: true,
+    },
+    {
+      id: 'feedback' as DashboardView,
+      label: 'Feedback Tester',
+      icon: '💬',
+      description: 'Visualizza e gestisci i feedback dei betatester',
       allowedForAll: false,
       requiresAdmin: true,
     },
@@ -79,9 +88,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose })
         return permissions.isAdmin ? (
           <TopicManagement
             currentUser={currentUser}
-            onBack={onClose} // Corretto: torna al feed principale
+            onBack={() => setActiveView('profile')}
           />
         ) : null;
+      case 'feedback':
+        return permissions.isAdmin ? <FeedbackManagement /> : null;
       default:
         return null;
     }

@@ -9,7 +9,8 @@ export enum Topic {
 export enum UserRole {
   USER = "user",
   MODERATOR = "moderator",
-  ADMIN = "admin"
+  ADMIN = "admin",
+  BETATESTER = "betatester"
 }
 
 export interface UserPermissions {
@@ -49,8 +50,8 @@ export interface Channel {
     id: string;
     name: string;
     description: string;
-    emoji: string;
-    filterTags: string[];
+    createdAt: Date;
+    isActive: boolean;
 }
 
 export interface SavedList {
@@ -105,7 +106,7 @@ export interface ListWithItems {
     userRole?: 'owner' | 'editor' | 'viewer';
 }
 
-export type Filter = 
+export type Filter =
   | { type: 'all' }
   | { type: 'favorites' }
   | { type: 'topic', value: Topic }
@@ -120,4 +121,16 @@ export interface TopicSuggestion {
   updatedAt: Date;
   createdBy: string; // UID dell'utente che ha creato l'argomento
   status: 'pending' | 'approved' | 'converted'; // Stato dell'argomento
+}
+
+export interface BetaFeedback {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName: string; // Nome completo dell'utente
+  section: string;
+  message: string;
+  status: 'inviato' | 'letto' | 'risolto';
+  createdAt: Date;
+  updatedAt?: Date;
 }

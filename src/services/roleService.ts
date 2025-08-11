@@ -25,6 +25,16 @@ export const getDefaultPermissions = (role: UserRole): UserPermissions => {
         canViewDashboard: true,
       };
 
+    case UserRole.BETATESTER:
+      return {
+        canCreateGems: false,
+        canEditGems: false,
+        canDeleteGems: false,
+        canManageUsers: false,
+        canModerateContent: false,
+        canViewDashboard: false,
+      };
+
     case UserRole.USER:
     default:
       return {

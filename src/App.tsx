@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Gem, User, SavedList, Channel, Filter, Topic, ListWithItems } from './types';
-import { TOPICS } from './constants';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Gem, User, SavedList, Channel, Filter, Topic, ListWithItems, UserRole } from './types';
 import { auth, googleProvider } from './services/firebase';
 import { onAuthStateChanged, User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInWithPopup } from 'firebase/auth';
 import * as firestoreService from './services/firestoreService';
+import * as feedbackService from './services/feedbackService';
 import Header from './components/Header';
 import GemCard from './components/GemCard';
 import GemDetailView from './components/GemDetailView';
@@ -12,6 +12,8 @@ import SavedView from './components/SavedView';
 import ProfileView from './components/ProfileView';
 import AdminDashboard from './components/admin/AdminDashboard';
 import TopicManagement from './components/admin/TopicManagement';
+import FeedbackButton from './components/FeedbackButton';
+import FeedbackModal from './components/FeedbackModal';
 import { SparklesIcon } from './components/icons';
 import SaveToListModal from './components/SaveToListModal';
 // Import admin utils in development
@@ -36,6 +38,10 @@ const App: React.FC = () => {
   
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [gemToSaveId, setGemToSaveId] = useState<string | null>(null);
+
+  // Stati per il sistema di feedback
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const feedbackButtonRef = React.useRef<any>(null);
 
   // Fetch initial static-like data
   useEffect(() => {
@@ -304,6 +310,53 @@ const App: React.FC = () => {
       alert("Profilo aggiornato!");
   }
 
+  // Funzioni per il sistema di feedback
+  const getCurrentSection = (): string => {
+    switch (currentView) {
+      case 'feed':
+        return 'Feed principale';
+      case 'detail':
+        return `Dettaglio gem: ${selectedGem?.title || 'Sconosciuto'}`;
+      case 'saved':
+        return 'Liste salvate';
+      case 'profile':
+        return 'Profilo utente';
+      case 'dashboard':
+        return 'Dashboard amministratore';
+      case 'topics':
+        return 'Gestione argomenti';
+      default:
+        return 'Sezione sconosciuta';
+    }
+  };
+
+  const handleFeedbackSubmit = async (section: string, message: string) => {
+    if (!firebaseUser || !user) return;
+
+    try {
+      const userName = `${user.firstName} ${user.lastName}`;
+      await feedbackService.createFeedback(
+        firebaseUser.uid,
+        user.email,
+        userName,
+        section,
+        message
+      );
+      // Mostra animazione di successo sul pulsante invece dell'alert
+      if (feedbackButtonRef.current?.showSuccess) {
+        feedbackButtonRef.current.showSuccess();
+      }
+    } catch (error) {
+      console.error('Errore nell\'invio del feedback:', error);
+      throw error; // Permette alla modale di gestire l'errore
+    }
+  };
+
+  // Verifica se l'utente può vedere il pulsante feedback
+  const canShowFeedbackButton = useMemo(() => {
+    return user && (user.role === UserRole.ADMIN || user.role === UserRole.BETATESTER);
+  }, [user]);
+
   const filteredGems = gems.filter(gem => {
       if (!gem.tags) return false; // Safety check
       switch (filter.type) {
@@ -423,12 +476,35 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
         {renderContent()}
-        {showLoginModal && <LoginModal 
+
+        {/* Pulsante feedback flottante per admin e betatester */}
+        {canShowFeedbackButton && (
+          <FeedbackButton
+            ref={feedbackButtonRef}
+            onClick={() => setShowFeedbackModal(true)}
+          />
+        )}
+
+        {showLoginModal && <LoginModal
             onLoginAttempt={handleLoginAttempt}
             onSignUpAttempt={handleSignUpAttempt}
             onGoogleAuth={handleGoogleAuth}
             onCancel={() => setShowLoginModal(false)}
         />}
+
+        {showFeedbackModal && (
+          <FeedbackModal
+            section={getCurrentSection()}
+            onSubmit={handleFeedbackSubmit}
+            onCancel={() => setShowFeedbackModal(false)}
+            onSuccess={() => {
+              if (feedbackButtonRef.current?.showSuccess) {
+                feedbackButtonRef.current.showSuccess();
+              }
+            }}
+          />
+        )}
+
         {isSaveModalOpen && gemToSaveId && (
             <SaveToListModal
                 isOpen={isSaveModalOpen}
