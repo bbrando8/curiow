@@ -36,6 +36,9 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('feed');
   const [selectedGemId, setSelectedGemId] = useState<string | null>(null);
   
+  // Nuovo stato per la modale del dettaglio
+  const [showGemDetailModal, setShowGemDetailModal] = useState(false);
+
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [gemToSaveId, setGemToSaveId] = useState<string | null>(null);
 
@@ -287,17 +290,17 @@ const App: React.FC = () => {
 
   const handleSelectGem = (gemId: string) => {
       setSelectedGemId(gemId);
-      handleNavigate('detail');
+      setShowGemDetailModal(true);
   };
   
   const handleBackToFeed = () => {
       setSelectedGemId(null);
-      handleNavigate('feed');
+      setShowGemDetailModal(false);
   };
   
   const handleSelectTag = (tag: string) => {
       setFilter({ type: 'tag', value: tag });
-      handleBackToFeed();
+      setShowGemDetailModal(false);
   };
   
   const handleUpdateUser = async (updatedUser: User) => {
@@ -428,17 +431,6 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (currentView) {
-        case 'detail':
-            return selectedGem ? (
-                <GemDetailView
-                    gem={selectedGem}
-                    isFavorite={allFavoriteIds.includes(selectedGem.id)}
-                    onBack={handleBackToFeed}
-                    onSaveRequest={handleSaveRequest}
-                    onAddUserQuestion={handleAddUserQuestion}
-                    onTagSelect={handleSelectTag}
-                />
-            ) : renderFeed(); // Fallback to feed if no gem selected
         case 'saved':
             return firebaseUser ? <SavedView 
                         allGems={gems} 
@@ -516,6 +508,20 @@ const App: React.FC = () => {
                 onToggleDefaultFavorite={handleToggleFavorite}
                 isSavedToDefault={userLists.find(l=>l.id==='default')?.gemIds.includes(gemToSaveId) ?? false}
             />
+        )}
+
+        {/* Modale dettaglio gem a schermo intero */}
+        {showGemDetailModal && selectedGem && (
+            <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 overflow-y-auto">
+                <GemDetailView
+                    gem={selectedGem}
+                    isFavorite={allFavoriteIds.includes(selectedGem.id)}
+                    onBack={handleBackToFeed}
+                    onSaveRequest={handleSaveRequest}
+                    onAddUserQuestion={handleAddUserQuestion}
+                    onTagSelect={handleSelectTag}
+                />
+            </div>
         )}
     </div>
   );
