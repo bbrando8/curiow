@@ -69,17 +69,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose })
               // TODO: Implementare aggiornamento utente nel dashboard
               console.log('Aggiornamento utente nel dashboard:', updatedUser);
             }}
-            onBack={() => setActiveView('profile')} // Rimane sulla stessa vista
+            onBack={onClose} // Corretto: torna al feed principale
             onNavigate={() => {}} // Non naviga fuori dal dashboard
           />
         );
       case 'users':
-        return permissions.isAdmin ? <UserManagement currentUser={currentUser} /> : null;
+        return permissions.isAdmin ? <UserManagement currentUser={currentUser} onBack={onClose} /> : null;
       case 'topics':
         return permissions.isAdmin ? (
           <TopicManagement
             currentUser={currentUser}
-            onBack={() => setActiveView('topics')} // Rimane nel dashboard
+            onBack={onClose} // Corretto: torna al feed principale
           />
         ) : null;
       default:
