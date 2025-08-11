@@ -139,7 +139,12 @@ export const fetchTopicSuggestions = async (status?: 'pending' | 'approved' | 'c
         }
 
         const topicSnapshot = await getDocs(q);
-        return topicSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TopicSuggestion));
+        // Filtra gli elementi eliminati lato client per evitare problemi con indici Firestore
+        const topics = topicSnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as TopicSuggestion))
+            .filter(topic => !topic.deleted); // Filtra solo quelli che hanno deleted = true
+
+        return topics;
     } catch (error) {
         console.error("Error fetching topic suggestions:", error);
         return [];

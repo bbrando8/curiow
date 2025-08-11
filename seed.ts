@@ -1,8 +1,8 @@
 import { collection, addDoc, setDoc, doc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { db, auth } from './src/services/firebase.js';
-import { Gem, Channel, Topic, Source, User, UserRole, TopicSuggestion } from './src/types.js';
-import { getDefaultPermissions } from './src/services/roleService.js';
+import { db, auth } from './src/services/firebase';
+import { Gem, Channel, Topic, Source, User, UserRole, TopicSuggestion } from './src/types';
+import { getDefaultPermissions } from './src/services/roleService';
 
 const sampleChannels: Omit<Channel, 'id'>[] = [
     {
@@ -262,13 +262,13 @@ async function seedDatabase() {
 
     try {
         // Seed Channels
-        console.log("\n📺 Caricamento canali...");
-        const channelsCollection = collection(db, 'channels');
-        for (const channel of sampleChannels) {
-            await addDoc(channelsCollection, channel);
-            console.log(`✅ Canale "${channel.name}" ${channel.emoji} aggiunto.`);
-        }
-        console.log(`🎉 ${sampleChannels.length} canali caricati con successo.`);
+//         console.log("\n📺 Caricamento canali...");
+//         const channelsCollection = collection(db, 'channels');
+//         for (const channel of sampleChannels) {
+//             await addDoc(channelsCollection, channel);
+//             console.log(`✅ Canale "${channel.name}" ${channel.emoji} aggiunto.`);
+//         }
+//         console.log(`🎉 ${sampleChannels.length} canali caricati con successo.`);
 
         // Seed Gems
         console.log("\n💎 Caricamento gemme...");
@@ -310,37 +310,37 @@ async function seedDatabase() {
             }
         ];
 
-        for (const userWithAuth of usersWithAuth) {
-            try {
-                // 1. Crea l'account di autenticazione
-                console.log(`📝 Creando account di autenticazione per ${userWithAuth.email}...`);
-                const userCredential = await createUserWithEmailAndPassword(
-                    auth,
-                    userWithAuth.email,
-                    userWithAuth.password
-                );
-
-                const uid = userCredential.user.uid;
-                console.log(`✅ Account creato con UID: ${uid}`);
-
-                // 2. Crea il profilo in Firestore usando l'UID reale
-                const userDocRef = doc(db, 'users', uid);
-                await setDoc(userDocRef, {
-                    ...userWithAuth.userData,
-                    createdAt: new Date(),
-                    lastLoginAt: new Date()
-                });
-
-                console.log(`✅ Profilo "${userWithAuth.userData.firstName} ${userWithAuth.userData.lastName}" (${userWithAuth.userData.role}) creato con UID: ${uid}`);
-
-            } catch (error: any) {
-                if (error.code === 'auth/email-already-in-use') {
-                    console.log(`⚠️  Account ${userWithAuth.email} già esistente, saltando...`);
-                } else {
-                    console.error(`❌ Errore creando utente ${userWithAuth.email}:`, error.message);
-                }
-            }
-        }
+//         for (const userWithAuth of usersWithAuth) {
+//             try {
+//                 // 1. Crea l'account di autenticazione
+//                 console.log(`📝 Creando account di autenticazione per ${userWithAuth.email}...`);
+//                 const userCredential = await createUserWithEmailAndPassword(
+//                     auth,
+//                     userWithAuth.email,
+//                     userWithAuth.password
+//                 );
+//
+//                 const uid = userCredential.user.uid;
+//                 console.log(`✅ Account creato con UID: ${uid}`);
+//
+//                 // 2. Crea il profilo in Firestore usando l'UID reale
+//                 const userDocRef = doc(db, 'users', uid);
+//                 await setDoc(userDocRef, {
+//                     ...userWithAuth.userData,
+//                     createdAt: new Date(),
+//                     lastLoginAt: new Date()
+//                 });
+//
+//                 console.log(`✅ Profilo "${userWithAuth.userData.firstName} ${userWithAuth.userData.lastName}" (${userWithAuth.userData.role}) creato con UID: ${uid}`);
+//
+//             } catch (error: any) {
+//                 if (error.code === 'auth/email-already-in-use') {
+//                     console.log(`⚠️  Account ${userWithAuth.email} già esistente, saltando...`);
+//                 } else {
+//                     console.error(`❌ Errore creando utente ${userWithAuth.email}:`, error.message);
+//                 }
+//             }
+//         }
 
         console.log(`🎉 Utenti con autenticazione processati con successo.`);
 

@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 // ATTENZIONE: Sostituisci questo oggetto con la configurazione del tuo progetto Firebase!
@@ -15,6 +15,12 @@ const firebaseConfig = {
 
 // Inizializza Firebase
 const app = initializeApp(firebaseConfig);
+
+// Configura Google Auth Provider
+export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
 
 // Esporta i servizi che ti servono
 export const auth = getAuth(app);

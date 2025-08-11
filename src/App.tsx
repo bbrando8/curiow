@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Gem, User, SavedList, Channel, Filter, Topic, ListWithItems } from './types';
 import { TOPICS } from './constants';
-import { auth } from './services/firebase';
-import { onAuthStateChanged, User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { auth, googleProvider } from './services/firebase';
+import { onAuthStateChanged, User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInWithPopup } from 'firebase/auth';
 import * as firestoreService from './services/firestoreService';
 import Header from './components/Header';
 import GemCard from './components/GemCard';
@@ -116,6 +116,30 @@ const App: React.FC = () => {
   
   const handleLoginAttempt = async (email: string, pass: string) => {
       await signInWithEmailAndPassword(auth, email, pass);
+  };
+
+  const handleGoogleAuth = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      // Controlla se il profilo utente esiste già
+      let userProfile = await firestoreService.fetchUserProfile(user.uid);
+
+      if (!userProfile) {
+        // Se è la prima volta che l'utente accede con Google, crea il profilo
+        const email = user.email || 'no-email@example.com';
+        const firstName = user.displayName?.split(' ')[0] || 'Nome';
+        const lastName = user.displayName?.split(' ').slice(1).join(' ') || 'Cognome';
+
+        await firestoreService.createUserProfile(user.uid, email, firstName, lastName);
+      }
+
+      // Il resto della logica di login è gestita automaticamente dall'listener onAuthStateChanged
+    } catch (error: any) {
+      console.error('Errore nell\'autenticazione Google:', error);
+      throw new Error('Errore nell\'autenticazione con Google: ' + error.message);
+    }
   };
 
   const handleLogout = () => {
@@ -402,7 +426,8 @@ const App: React.FC = () => {
         {showLoginModal && <LoginModal 
             onLoginAttempt={handleLoginAttempt}
             onSignUpAttempt={handleSignUpAttempt}
-            onCancel={() => setShowLoginModal(false)} 
+            onGoogleAuth={handleGoogleAuth}
+            onCancel={() => setShowLoginModal(false)}
         />}
         {isSaveModalOpen && gemToSaveId && (
             <SaveToListModal
