@@ -115,7 +115,9 @@ export type Filter =
 
 export interface TopicSuggestion {
   id: string;
-  text: string;
+  title: string; // Titolo generato/modificato
+  objective: string; // Sommario generato/modificato (precedentemente 'summary')
+  originalSuggestion?: string; // L'idea originale dell'utente
   tags: string[];
   createdAt: Date;
   updatedAt: Date;

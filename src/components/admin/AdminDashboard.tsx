@@ -87,7 +87,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose })
       case 'topics':
         return permissions.isAdmin ? (
           <TopicManagement
-            currentUser={currentUser}
+            currentUser={{ ...currentUser, uid: currentUser.id }}
             onBack={() => setActiveView('profile')}
           />
         ) : null;

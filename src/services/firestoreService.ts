@@ -151,16 +151,24 @@ export const fetchTopicSuggestions = async (status?: 'pending' | 'approved' | 'c
     }
 };
 
-export const createTopicSuggestion = async (text: string, tags: string[], createdBy: string): Promise<void> => {
-    const topicsCollection = collection(db, 'topicSuggestions');
-    await addDoc(topicsCollection, {
-        text,
-        tags,
-        createdBy,
-        status: 'pending',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-    });
+export const createTopicSuggestion = async (
+  title: string,
+  objective: string,
+  tags: string[],
+  createdBy: string,
+  originalSuggestion?: string
+): Promise<void> => {
+  const topicsCollection = collection(db, 'topicSuggestions');
+  await addDoc(topicsCollection, {
+    title,
+    objective,
+    originalSuggestion: originalSuggestion || '',
+    tags,
+    createdBy,
+    status: 'pending',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
 };
 
 export const updateTopicSuggestion = async (id: string, data: Partial<TopicSuggestion>): Promise<void> => {

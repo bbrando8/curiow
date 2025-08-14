@@ -7,6 +7,7 @@ import {
   deleteTopicSuggestion
 } from '../../services/firestoreService';
 import { useUserPermissions } from '../../services/roleService';
+import { generateTopicSuggestionDetails } from '../../services/apiService';
 import { ChevronLeftIcon } from '../icons';
 
 interface TopicManagementProps {
@@ -61,6 +62,7 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTopic, setEditingTopic] = useState<TopicSuggestion | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Filtri e ricerca
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'converted'>('all');
@@ -88,7 +90,9 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
 
   // Form state
   const [formData, setFormData] = useState({
-    text: '',
+    originalSuggestion: '',
+    title: '',
+    objective: '',
     tags: '',
   });
 
@@ -160,18 +164,44 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
     );
   };
 
+  const handleGenerateDetails = async () => {
+    if (!formData.originalSuggestion) return;
+    setIsGenerating(true);
+    try {
+      const details = await generateTopicSuggestionDetails(formData.originalSuggestion);
+      setFormData(prev => ({
+        ...prev,
+        title: details.title,
+        objective: details.objective,
+        tags: details.tags.join(', '),
+      }));
+    } catch (error) {
+      console.error('Errore nella generazione dei dettagli:', error);
+      // Potresti voler mostrare un messaggio di errore all'utente qui
+    }
+    setIsGenerating(false);
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser?.uid) return;
+    if (!currentUser?.uid) {
+      return;
+    }
 
     try {
       const tags = formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
-      await createTopicSuggestion(formData.text, tags, currentUser.uid);
-      setFormData({ text: '', tags: '' });
-      setShowCreateModal(false);
-      await loadTopics();
+      await createTopicSuggestion(
+        formData.title,
+        formData.objective,
+        tags,
+        currentUser.uid,
+        formData.originalSuggestion
+      );
+
+      setShowCreateModal(false); // Chiudi la modale
+      await loadTopics(); // Ricarica i dati
     } catch (error) {
-      console.error('Errore nella creazione:', error);
+      console.error('Errore nella creazione del suggerimento:', error);
     }
   };
 
@@ -182,11 +212,11 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
     try {
       const tags = formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
       await updateTopicSuggestion(editingTopic.id, {
-        text: formData.text,
+        title: formData.title,
+        objective: formData.objective,
         tags,
       });
-      setFormData({ text: '', tags: '' });
-      setEditingTopic(null);
+      setEditingTopic(null); // Chiudi la modale di modifica
       await loadTopics();
     } catch (error) {
       console.error('Errore nell\'aggiornamento:', error);
@@ -196,21 +226,34 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
   const openEditModal = (topic: TopicSuggestion) => {
     setEditingTopic(topic);
     setFormData({
-      text: topic.text,
+      title: topic.title,
+      objective: topic.objective,
       tags: topic.tags.join(', '),
+      originalSuggestion: topic.originalSuggestion || '',
     });
   };
 
   const resetForm = () => {
-    setFormData({ text: '', tags: '' });
+    setFormData({ originalSuggestion: '', title: '', objective: '', tags: '' });
     setEditingTopic(null);
     setShowCreateModal(false);
   };
 
+  useEffect(() => {
+    if (!showCreateModal && !editingTopic) {
+      resetForm();
+    }
+  }, [showCreateModal, editingTopic]);
+
   // Filtro combinato per ricerca
   const filteredTopics = topics.filter(topic => {
-    const matchesText = topic.text.toLowerCase().includes(textSearch.toLowerCase());
-    const matchesTag = tagSearch === '' || topic.tags.some(tag =>
+    const objective = topic.objective || '';
+    const title = topic.title || '';
+    const tags = topic.tags || [];
+
+    const matchesText = objective.toLowerCase().includes(textSearch.toLowerCase()) ||
+                        title.toLowerCase().includes(textSearch.toLowerCase());
+    const matchesTag = tagSearch === '' || tags.some(tag =>
       tag.toLowerCase().includes(tagSearch.toLowerCase())
     );
     return matchesText && matchesTag;
@@ -410,8 +453,11 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
                   {currentTopics.map((topic) => (
                     <tr key={topic.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900 max-w-md">
-                          {topic.text}
+                        <div className="text-sm font-bold text-gray-900 max-w-md">
+                          {topic.title}
+                        </div>
+                        <div className="text-sm text-gray-600 max-w-md mt-1">
+                          {topic.objective}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -546,49 +592,95 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
                 <form onSubmit={editingTopic ? handleUpdate : handleCreate}>
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Testo dell'argomento
+                      Idea iniziale
                     </label>
                     <textarea
-                      value={formData.text}
-                      onChange={(e) => setFormData({...formData, text: e.target.value})}
-                      required
-                      rows={4}
+                      value={formData.originalSuggestion}
+                      onChange={(e) => setFormData({...formData, originalSuggestion: e.target.value})}
+                      required={!editingTopic}
+                      disabled={!!editingTopic || !!formData.title}
+                      rows={3}
                       placeholder="Descrivi l'argomento che vorresti sviluppare in una gemma..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
                     />
                   </div>
 
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Tag (separati da virgole)
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.tags}
-                      onChange={(e) => setFormData({...formData, tags: e.target.value})}
-                      placeholder="es: storia, arte, scienza, tecnologia"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      I tag aiutano a categorizzare l'argomento
-                    </p>
-                  </div>
+                  {!formData.title && !editingTopic && (
+                    <div className="flex justify-end mb-4">
+                      <button
+                        type="button"
+                        onClick={handleGenerateDetails}
+                        disabled={!formData.originalSuggestion || isGenerating}
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:bg-green-300"
+                      >
+                        {isGenerating ? 'Generazione...' : 'Genera Dettagli'}
+                      </button>
+                    </div>
+                  )}
 
-                  <div className="flex justify-end space-x-3">
-                    <button
-                      type="button"
-                      onClick={resetForm}
-                      className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-                    >
-                      Annulla
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                    >
-                      {editingTopic ? 'Aggiorna' : 'Crea'}
-                    </button>
-                  </div>
+                  {(formData.title || editingTopic) && (
+                    <>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Titolo
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.title}
+                          onChange={(e) => setFormData({...formData, title: e.target.value})}
+                          required
+                          placeholder="Titolo generato per l'argomento"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Obiettivo
+                        </label>
+                        <textarea
+                          value={formData.objective}
+                          onChange={(e) => setFormData({...formData, objective: e.target.value})}
+                          required
+                          rows={5}
+                          placeholder="Obiettivo generato per l'argomento..."
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div className="mb-6">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Tag (separati da virgole)
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.tags}
+                          onChange={(e) => setFormData({...formData, tags: e.target.value})}
+                          placeholder="es: storia, arte, scienza, tecnologia"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          I tag aiutano a categorizzare l'argomento
+                        </p>
+                      </div>
+
+                      <div className="flex justify-end space-x-3">
+                        <button
+                          type="button"
+                          onClick={() => editingTopic ? setEditingTopic(null) : setShowCreateModal(false)}
+                          className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                        >
+                          Annulla
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                        >
+                          {editingTopic ? 'Aggiorna' : 'Salva Argomento'}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </form>
               </div>
             </div>
