@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Gem, User, SavedList, Channel, Filter, Topic, ListWithItems, UserRole } from './types';
-import { auth, googleProvider } from './services/firebase';
+import { auth, googleProvider, getIdToken } from './services/firebase';
 import { onAuthStateChanged, User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInWithPopup } from 'firebase/auth';
 import * as firestoreService from './services/firestoreService';
 import * as feedbackService from './services/feedbackService';
@@ -51,6 +51,17 @@ const App: React.FC = () => {
   // Stati per il sistema di feedback
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const feedbackButtonRef = React.useRef<any>(null);
+
+  const handleSelectGem = async (gemId: string) => {
+    if (auth.currentUser) {
+      const token = await getIdToken();
+      console.log('Firebase JWT Token:', token);
+    } else {
+      console.log('Utente non autenticato, nessun JWT token da mostrare.');
+    }
+    setSelectedGemId(gemId);
+    setShowGemDetailModal(true);
+  };
 
   // Fetch initial static-like data
   useEffect(() => {
@@ -137,7 +148,7 @@ const App: React.FC = () => {
       await firestoreService.createUserProfile(userCredential.user.uid, email, firstName, lastName);
       handleSuccessfulAuth();
   };
-  
+
   const handleLoginAttempt = async (email: string, pass: string) => {
       const userCredential = await signInWithEmailAndPassword(auth, email, pass);
       handleSuccessfulAuth();
@@ -309,16 +320,6 @@ const App: React.FC = () => {
       await firestoreService.addUserQuestion(gemId, question);
   };
 
-  const handleSelectGem = (gemId: string) => {
-      setSelectedGemId(gemId);
-      setShowGemDetailModal(true);
-  };
-  
-  const handleBackToFeed = () => {
-      setSelectedGemId(null);
-      setShowGemDetailModal(false);
-  };
-  
   const handleSelectTag = (tag: string) => {
       setFilter({ type: 'tag', value: tag });
       setShowGemDetailModal(false);
@@ -376,28 +377,14 @@ const App: React.FC = () => {
     }
   };
 
-  const filteredGems = gems.filter(gem => {
-      if (!gem.tags) return false; // Safety check
-      switch (filter.type) {
-        case 'all':
-            return true;
-        case 'favorites':
-            return firebaseUser ? allFavoriteIds.includes(gem.id) : false;
-        case 'topic':
-            return gem.topic === filter.value;
-        case 'channel':
-            const channel = channels.find(c => c.id === filter.value);
-            if (channel) {
-                return gem.tags.some(tag => channel.filterTags.includes(tag.toLowerCase()));
-            }
-            return false;
-        case 'tag':
-            return gem.tags.map(t => t.toLowerCase()).includes(filter.value.toLowerCase());
-        default:
-            return true;
-      }
-  });
-  
+  const filteredGems = useMemo(() => {
+    if (filter.type === 'all') return gems;
+    if (filter.type === 'channel') return gems.filter(g => g.channelId === filter.id);
+    if (filter.type === 'topic') return gems.filter(g => g.topic === filter.id);
+    if (filter.type === 'tag') return gems.filter(g => g.tags?.includes(filter.id));
+    return gems;
+  }, [gems, filter]);
+
   // Effetto per l'Intersection Observer della modale di onboarding
   useEffect(() => {
     // Attiva l'observer solo se l'utente non è loggato e non ha già visto la modale in questa sessione
@@ -519,8 +506,8 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentView) {
         case 'saved':
-            return firebaseUser ? <SavedView 
-                        allGems={gems} 
+            return firebaseUser ? <SavedView
+                        allGems={gems}
                         allFavoriteIds={allFavoriteIds}
                         savedLists={userLists}
                         onUpdateLists={updateUserLists}
@@ -560,6 +547,10 @@ const App: React.FC = () => {
   const handleOnboardingSignUp = () => {
     setShowOnboardingModal(false);
     setShowLoginModal(true);
+  };
+
+  const handleBackToFeed = () => {
+    setShowGemDetailModal(false);
   };
 
   return (

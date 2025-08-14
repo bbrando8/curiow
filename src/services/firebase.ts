@@ -25,3 +25,11 @@ googleProvider.setCustomParameters({
 // Esporta i servizi che ti servono
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+export const getIdToken = async (): Promise<string | null> => {
+    const user = auth.currentUser;
+    if (user) {
+        return await user.getIdToken();
+    }
+    return null;
+    };
