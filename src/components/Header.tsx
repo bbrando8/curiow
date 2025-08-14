@@ -48,7 +48,7 @@ const Header: React.FC<HeaderProps> = ({ isLoggedIn, user, onLogin, onLogout, se
 
   const getButtonClass = (filter: Filter) => {
     const baseClass = 'px-3 py-1.5 text-sm font-semibold rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-900 focus:ring-indigo-500 whitespace-nowrap';
-    
+
     if (selectedFilter.type === filter.type && ('value' in selectedFilter && 'value' in filter ? selectedFilter.value === filter.value : true)) {
       return `${baseClass} bg-indigo-600 text-white shadow-md`;
     }

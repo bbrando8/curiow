@@ -9,9 +9,10 @@ interface GemCardProps {
   onSaveRequest: (gemId: string) => void;
   onSelect: (gemId: string) => void;
   onLoginRequest: () => void;
+  onView?: () => void; // Nuova prop per tracciare le visualizzazioni
 }
 
-const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRequest, onSelect, onLoginRequest }) => {
+const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRequest, onSelect, onLoginRequest, onView }) => {
 
   const handleCardClick = () => {
     if (!isLoggedIn) {
@@ -39,6 +40,12 @@ const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRe
         alert("Contenuto copiato negli appunti!");
     }
   };
+
+  React.useEffect(() => {
+    if (onView) {
+      onView();
+    }
+  }, [onView]);
 
   return (
     <div 

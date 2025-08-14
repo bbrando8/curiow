@@ -14,6 +14,7 @@ import AdminDashboard from './components/admin/AdminDashboard';
 import TopicManagement from './components/admin/TopicManagement';
 import FeedbackButton from './components/FeedbackButton';
 import FeedbackModal from './components/FeedbackModal';
+import OnboardingModal from './components/OnboardingModal';
 import { SparklesIcon } from './components/icons';
 import SaveToListModal from './components/SaveToListModal';
 // Import admin utils in development
@@ -42,6 +43,11 @@ const App: React.FC = () => {
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [gemToSaveId, setGemToSaveId] = useState<string | null>(null);
 
+  // Stati per la modale di onboarding
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
+  const onboardingTriggerRef = React.useRef<HTMLDivElement | null>(null);
+
   // Stati per il sistema di feedback
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const feedbackButtonRef = React.useRef<any>(null);
@@ -67,6 +73,14 @@ const App: React.FC = () => {
           console.log('Auth state changed - currentUser:', currentUser?.uid);
           setFirebaseUser(currentUser);
           if (currentUser) {
+              // Log del JWT token quando lo stato cambia
+              try {
+                  const idToken = await currentUser.getIdToken();
+                  console.log('JWT Token (Auth State Changed):', idToken);
+              } catch (error) {
+                  console.error('Errore nel recupero del JWT token:', error);
+              }
+
               let userProfile = await firestoreService.fetchUserProfile(currentUser.uid);
               console.log('Fetched user profile:', userProfile);
 
@@ -121,16 +135,23 @@ const App: React.FC = () => {
   const handleSignUpAttempt = async (email: string, pass: string, firstName: string, lastName: string) => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
       await firestoreService.createUserProfile(userCredential.user.uid, email, firstName, lastName);
+      handleSuccessfulAuth();
   };
   
   const handleLoginAttempt = async (email: string, pass: string) => {
-      await signInWithEmailAndPassword(auth, email, pass);
+      const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+      handleSuccessfulAuth();
+      return userCredential;
   };
 
   const handleGoogleAuth = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
+
+      // Log del JWT token
+      const idToken = await user.getIdToken();
+      console.log('JWT Token (Google Login):', idToken);
 
       // Controlla se il profilo utente esiste già
       let userProfile = await firestoreService.fetchUserProfile(user.uid);
@@ -144,7 +165,7 @@ const App: React.FC = () => {
         await firestoreService.createUserProfile(user.uid, email, firstName, lastName);
       }
 
-      // Il resto della logica di login è gestita automaticamente dall'listener onAuthStateChanged
+      handleSuccessfulAuth();
     } catch (error: any) {
       console.error('Errore nell\'autenticazione Google:', error);
       throw new Error('Errore nell\'autenticazione con Google: ' + error.message);
@@ -355,11 +376,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Verifica se l'utente può vedere il pulsante feedback
-  const canShowFeedbackButton = useMemo(() => {
-    return user && (user.role === UserRole.ADMIN || user.role === UserRole.BETATESTER);
-  }, [user]);
-
   const filteredGems = gems.filter(gem => {
       if (!gem.tags) return false; // Safety check
       switch (filter.type) {
@@ -382,6 +398,53 @@ const App: React.FC = () => {
       }
   });
   
+  // Effetto per l'Intersection Observer della modale di onboarding
+  useEffect(() => {
+    // Attiva l'observer solo se l'utente non è loggato e non ha già visto la modale in questa sessione
+    if (firebaseUser || hasSeenOnboarding || isLoading) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setShowOnboardingModal(true);
+          setHasSeenOnboarding(true);
+          observer.disconnect(); // Smette di osservare dopo aver mostrato la modale una volta
+        }
+      },
+      {
+        root: null, // Osserva rispetto al viewport
+        threshold: 0.5, // Si attiva quando il 50% dell'elemento è visibile
+      }
+    );
+
+    const trigger = onboardingTriggerRef.current;
+    if (trigger) {
+      observer.observe(trigger);
+    }
+
+    return () => {
+      if (trigger) {
+        observer.unobserve(trigger);
+      }
+    };
+  }, [firebaseUser, hasSeenOnboarding, isLoading, filteredGems]); // Le dipendenze assicurano che l'observer si riattivi se il filtro cambia
+
+
+  // Verifica se l'utente può vedere il pulsante feedback
+  const canShowFeedbackButton = useMemo(() => {
+    return user && (user.role === UserRole.ADMIN || user.role === UserRole.BETATESTER);
+  }, [user]);
+
+  /* HO SPOSTATO LA DICHIARAZIONE DI filteredGems PRIMA DELLO USEEFFECT PER RISOLVERE IL BUG */
+
+  // Limita le gems visualizzate per utenti non loggati
+  const GEMS_LIMIT_FOR_UNLOGGED_USERS = 7;
+  const displayedGems = !firebaseUser
+    ? filteredGems.slice(0, GEMS_LIMIT_FOR_UNLOGGED_USERS)
+    : filteredGems;
+
   const selectedGem = gems.find(gem => gem.id === selectedGemId);
 
   const renderFeed = () => (
@@ -405,18 +468,42 @@ const App: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-8">
-            {filteredGems.length > 0 ? (
-                filteredGems.map(gem => (
-                    <GemCard
-                        key={gem.id}
-                        gem={gem}
-                        isLoggedIn={!!firebaseUser}
-                        isFavorite={allFavoriteIds.includes(gem.id)}
-                        onSaveRequest={handleSaveRequest}
-                        onSelect={handleSelectGem}
-                        onLoginRequest={handleLoginRequest}
-                    />
-                ))
+            {displayedGems.length > 0 ? (
+                <>
+                  {displayedGems.map((gem, index) => (
+                      <React.Fragment key={gem.id}>
+                        <GemCard
+                          gem={gem}
+                          isLoggedIn={!!firebaseUser}
+                          isFavorite={allFavoriteIds.includes(gem.id)}
+                          onSaveRequest={handleSaveRequest}
+                          onSelect={handleSelectGem}
+                          onLoginRequest={handleLoginRequest}
+                        />
+                        {/* Trigger per la modale di onboarding dopo la 4a card per utenti non loggati */}
+                        {!firebaseUser && index === 3 && !hasSeenOnboarding && (
+                          <div ref={onboardingTriggerRef} style={{ height: '1px' }} />
+                        )}
+                      </React.Fragment>
+                  ))}
+                  {/* Mostra il blocco di invito al login se l'utente non è loggato e ci sono più gemme disponibili */}
+                  {!firebaseUser && filteredGems.length > GEMS_LIMIT_FOR_UNLOGGED_USERS && (
+                    <div className="p-8 text-center bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 rounded-2xl shadow-2xl my-8">
+                      <h2 className="text-3xl font-bold text-white mb-3">Continua a scoprire</h2>
+                      <p className="text-indigo-300 text-lg mb-6">
+                        Registrati o accedi per sbloccare tutti i contenuti e salvare le tue gemme preferite.
+                      </p>
+                      <div className="flex flex-col sm:flex-row justify-center gap-4">
+                        <button
+                          onClick={() => setShowLoginModal(true)}
+                          className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 px-8 rounded-full transition-all duration-300 shadow-lg transform hover:scale-105"
+                        >
+                          Registrati o Accedi
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
             ) : (
                 <div className="text-center pt-20 text-slate-500 dark:text-slate-400">
                     <h3 className="text-xl font-semibold">Nessuna gemma trovata</h3>
@@ -465,6 +552,16 @@ const App: React.FC = () => {
     }
   }
 
+  const handleOnboardingLogin = () => {
+    setShowOnboardingModal(false);
+    setShowLoginModal(true);
+  };
+
+  const handleOnboardingSignUp = () => {
+    setShowOnboardingModal(false);
+    setShowLoginModal(true);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
         {renderContent()}
@@ -483,6 +580,15 @@ const App: React.FC = () => {
             onGoogleAuth={handleGoogleAuth}
             onCancel={() => setShowLoginModal(false)}
         />}
+
+        {showOnboardingModal && (
+          <OnboardingModal
+            isOpen={showOnboardingModal}
+            onLoginRequest={handleOnboardingLogin}
+            onSignUpRequest={handleOnboardingSignUp}
+            onClose={() => setShowOnboardingModal(false)}
+          />
+        )}
 
         {showFeedbackModal && (
           <FeedbackModal
