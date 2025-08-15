@@ -34,13 +34,13 @@ export const generateTopicSuggestionDetails = async (message: string): Promise<G
     throw new Error('Utente non autenticato. Impossibile generare il suggerimento.');
   }
 
-  const response = await fetch(`${API_BASE_URL}/curiow-suggest-topic`, {
+  const response = await fetch(`https://n8n.srv861958.hstgr.cloud/webhook/curiow-api`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, apitype: 'create-suggest' }),
   });
 
   if (!response.ok) {

@@ -39,7 +39,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({
       title: "Community di menti curiose",
       subtitle: "Il tuo percorso ti aspetta",
       description: "Non solo un'app, ma una community di persone proattive che cercano crescita attraverso l'intrattenimento intelligente.",
-      videoSrc: "/videos/curiow_slide2.mp4",
+      videoSrc: "/videos/curiow_slide3.mp4",
       ctaText: "Registrati Ora"
     }
   ];

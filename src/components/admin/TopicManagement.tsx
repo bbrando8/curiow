@@ -171,9 +171,9 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
       const details = await generateTopicSuggestionDetails(formData.originalSuggestion);
       setFormData(prev => ({
         ...prev,
-        title: details.title,
-        objective: details.objective,
-        tags: details.tags.join(', '),
+        title: details.title || '',
+        objective: details.objective || '',
+        tags: Array.isArray(details.tags) ? details.tags.join(', ') : '',
       }));
     } catch (error) {
       console.error('Errore nella generazione dei dettagli:', error);
