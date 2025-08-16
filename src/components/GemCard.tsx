@@ -30,7 +30,7 @@ const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRe
         onSaveRequest(gem.id);
     }
   };
-  
+
   const handleShareClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isLoggedIn) {
