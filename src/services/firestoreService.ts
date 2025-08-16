@@ -373,3 +373,82 @@ export const {
     removeMemberFromList,
     checkGemInList
 } = listService;
+
+// --- Channel Operations ---
+
+export const fetchAllChannels = async (): Promise<(Channel & { id: string })[]> => {
+  try {
+    const channelsCollection = collection(db, 'channels');
+    const q = query(channelsCollection, orderBy('createdAt', 'desc'));
+    const channelSnapshot = await getDocs(q);
+    return channelSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt?.toDate() || new Date()
+    } as Channel & { id: string }));
+  } catch (error) {
+    console.error("Error fetching all channels:", error);
+    return [];
+  }
+};
+
+export const createChannel = async (channelData: Omit<Channel, 'id' | 'createdAt'>): Promise<string> => {
+  try {
+    const channelsCollection = collection(db, 'channels');
+    const docRef = await addDoc(channelsCollection, {
+      ...channelData,
+      createdAt: new Date()
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error("Error creating channel:", error);
+    throw error;
+  }
+};
+
+export const updateChannel = async (channelId: string, channelData: Partial<Channel>): Promise<void> => {
+  try {
+    const channelDocRef = doc(db, 'channels', channelId);
+    await updateDoc(channelDocRef, {
+      ...channelData,
+      updatedAt: new Date()
+    });
+  } catch (error) {
+    console.error("Error updating channel:", error);
+    throw error;
+  }
+};
+
+export const deleteChannel = async (channelId: string): Promise<void> => {
+  try {
+    const channelDocRef = doc(db, 'channels', channelId);
+    await updateDoc(channelDocRef, {
+      isActive: false,
+      deletedAt: new Date()
+    });
+  } catch (error) {
+    console.error("Error deleting channel:", error);
+    throw error;
+  }
+};
+
+export const searchChannels = async (searchTerm: string): Promise<(Channel & { id: string })[]> => {
+  try {
+    const channelsCollection = collection(db, 'channels');
+    const channelSnapshot = await getDocs(channelsCollection);
+    const allChannels = channelSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt?.toDate() || new Date()
+    } as Channel & { id: string }));
+
+    // Filtro lato client per la ricerca
+    return allChannels.filter(channel =>
+      channel.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      channel.description.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  } catch (error) {
+    console.error("Error searching channels:", error);
+    return [];
+  }
+};

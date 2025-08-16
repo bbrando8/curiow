@@ -19,6 +19,8 @@ import { SparklesIcon } from './components/icons';
 import SaveToListModal from './components/SaveToListModal';
 // Import admin utils in development
 import './utils/adminUtils';
+import './utils/migratePermissions';
+import './utils/migrateChannels';
 
 type View = 'feed' | 'detail' | 'saved' | 'profile' | 'dashboard' | 'topics';
 
@@ -146,12 +148,12 @@ const App: React.FC = () => {
   const handleSignUpAttempt = async (email: string, pass: string, firstName: string, lastName: string) => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
       await firestoreService.createUserProfile(userCredential.user.uid, email, firstName, lastName);
-      handleSuccessfulAuth();
+      setShowLoginModal(false); // Chiudi il modal dopo il successo
   };
 
   const handleLoginAttempt = async (email: string, pass: string) => {
       const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-      handleSuccessfulAuth();
+      setShowLoginModal(false); // Chiudi il modal dopo il successo
       return userCredential;
   };
 
@@ -168,7 +170,7 @@ const App: React.FC = () => {
       let userProfile = await firestoreService.fetchUserProfile(user.uid);
 
       if (!userProfile) {
-        // Se è la prima volta che l'utente accede con Google, crea il profilo
+        // Se �� la prima volta che l'utente accede con Google, crea il profilo
         const email = user.email || 'no-email@example.com';
         const firstName = user.displayName?.split(' ')[0] || 'Nome';
         const lastName = user.displayName?.split(' ').slice(1).join(' ') || 'Cognome';
@@ -176,7 +178,7 @@ const App: React.FC = () => {
         await firestoreService.createUserProfile(user.uid, email, firstName, lastName);
       }
 
-      handleSuccessfulAuth();
+      setShowLoginModal(false); // Chiudi il modal dopo il successo
     } catch (error: any) {
       console.error('Errore nell\'autenticazione Google:', error);
       throw new Error('Errore nell\'autenticazione con Google: ' + error.message);

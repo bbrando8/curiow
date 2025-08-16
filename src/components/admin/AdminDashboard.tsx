@@ -5,13 +5,14 @@ import ProfileView from '../ProfileView';
 import UserManagement from './UserManagement';
 import TopicManagement from './TopicManagement';
 import FeedbackManagement from './FeedbackManagement';
+import ChannelManagement from './ChannelManagement';
 
 interface AdminDashboardProps {
   currentUser: User & { id: string } | null;
   onClose: () => void;
 }
 
-type DashboardView = 'profile' | 'users' | 'topics' | 'feedback';
+type DashboardView = 'profile' | 'users' | 'topics' | 'feedback' | 'channels';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose }) => {
   const [activeView, setActiveView] = useState<DashboardView>('profile');
@@ -49,10 +50,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose })
       allowedForAll: false,
       requiresAdmin: true,
     },
+    {
+      id: 'channels' as DashboardView,
+      label: 'Gestione Canali',
+      icon: '📺',
+      description: 'Gestisci i canali per le trasmissioni',
+      allowedForAll: false,
+      requiresChannelPermission: true,
+    },
   ];
 
   const visibleMenuItems = menuItems.filter(item =>
-    item.allowedForAll || (item.requiresAdmin && permissions.isAdmin)
+    item.allowedForAll ||
+    (item.requiresAdmin && permissions.isAdmin) ||
+    (item.requiresChannelPermission && permissions.canManageChannels)
   );
 
   const renderActiveView = () => {
@@ -92,7 +103,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose })
           />
         ) : null;
       case 'feedback':
-        return permissions.isAdmin ? <FeedbackManagement /> : null;
+        return permissions.isAdmin ? <FeedbackManagement onBack={() => setActiveView('profile')} /> : null;
+      case 'channels':
+        return permissions.canManageChannels ? (
+          <ChannelManagement
+            currentUser={currentUser}
+            onBack={() => setActiveView('profile')}
+          />
+        ) : null;
       default:
         return null;
     }

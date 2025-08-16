@@ -20,6 +20,7 @@ export interface UserPermissions {
   canManageUsers: boolean;
   canModerateContent: boolean;
   canViewDashboard: boolean;
+  canManageChannels: boolean;
 }
 
 export interface UserQuestion {

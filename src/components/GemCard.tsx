@@ -48,7 +48,7 @@ const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRe
   }, [onView]);
 
   return (
-    <div 
+    <div
         onClick={handleCardClick}
         className="bg-white dark:bg-slate-800 rounded-xl shadow-lg overflow-hidden snap-center group transition-transform duration-200 ease-in-out hover:scale-105 cursor-pointer"
         role="button"
@@ -57,7 +57,7 @@ const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRe
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleCardClick()}
     >
       <img src={gem.imageUrl} alt={gem.title} className="w-full h-auto object-cover aspect-[3/4]" />
-      
+
       <div className="p-5">
         <div className="flex justify-between items-start">
             <div>

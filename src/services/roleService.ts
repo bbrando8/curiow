@@ -13,6 +13,7 @@ export const getDefaultPermissions = (role: UserRole): UserPermissions => {
         canManageUsers: true,
         canModerateContent: true,
         canViewDashboard: true,
+        canManageChannels: true,
       };
 
     case UserRole.MODERATOR:
@@ -23,6 +24,7 @@ export const getDefaultPermissions = (role: UserRole): UserPermissions => {
         canManageUsers: false,
         canModerateContent: true,
         canViewDashboard: true,
+        canManageChannels: true,
       };
 
     case UserRole.BETATESTER:
@@ -33,6 +35,7 @@ export const getDefaultPermissions = (role: UserRole): UserPermissions => {
         canManageUsers: false,
         canModerateContent: false,
         canViewDashboard: false,
+        canManageChannels: false,
       };
 
     case UserRole.USER:
@@ -44,6 +47,7 @@ export const getDefaultPermissions = (role: UserRole): UserPermissions => {
         canManageUsers: false,
         canModerateContent: false,
         canViewDashboard: false,
+        canManageChannels: false,
       };
   }
 };
@@ -90,6 +94,8 @@ export const useUserPermissions = (user: { role: UserRole; permissions: UserPerm
       canDeleteGems: false,
       canManageUsers: false,
       canModerateContent: false,
+      canViewDashboard: false,
+      canManageChannels: false,
       isAdmin: false,
       isModerator: false,
     };
