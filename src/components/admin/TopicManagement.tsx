@@ -64,6 +64,10 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
   const [editingTopic, setEditingTopic] = useState<TopicSuggestion | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Selezione multipla
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [bulkAction, setBulkAction] = useState<'pending' | 'approved' | 'converted' | ''>('');
+
   // Filtri e ricerca
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'converted'>('all');
   const [textSearch, setTextSearch] = useState('');
@@ -164,6 +168,80 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
     );
   };
 
+  // Gestione selezione multipla
+  const handleSelectTopic = (topicId: string) => {
+    setSelectedTopics(prev =>
+      prev.includes(topicId)
+        ? prev.filter(id => id !== topicId)
+        : [...prev, topicId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedTopics.length === currentTopics.length) {
+      setSelectedTopics([]);
+    } else {
+      setSelectedTopics(currentTopics.map(topic => topic.id));
+    }
+  };
+
+  const handleBulkStatusChange = async () => {
+    if (!bulkAction || selectedTopics.length === 0) return;
+
+    const statusLabels = {
+      pending: 'In attesa',
+      approved: 'Approvato',
+      converted: 'Convertito'
+    };
+
+    showConfirmation(
+      'Conferma cambio stato multiplo',
+      `Sei sicuro di voler cambiare lo stato di ${selectedTopics.length} argomenti a "${statusLabels[bulkAction]}"?`,
+      async () => {
+        try {
+          // Esegui l'aggiornamento per tutti gli argomenti selezionati
+          await Promise.all(
+            selectedTopics.map(topicId =>
+              updateTopicSuggestion(topicId, { status: bulkAction })
+            )
+          );
+
+          // Reset selezione e ricarica dati
+          setSelectedTopics([]);
+          setBulkAction('');
+          await loadTopics();
+        } catch (error) {
+          console.error('Errore nel cambio status multiplo:', error);
+        }
+      },
+      'Conferma'
+    );
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedTopics.length === 0) return;
+
+    showConfirmation(
+      'Conferma eliminazione multipla',
+      `Sei sicuro di voler eliminare ${selectedTopics.length} argomenti? Questa azione non può essere annullata.`,
+      async () => {
+        try {
+          // Esegui l'eliminazione per tutti gli argomenti selezionati
+          await Promise.all(
+            selectedTopics.map(topicId => deleteTopicSuggestion(topicId))
+          );
+
+          // Reset selezione e ricarica dati
+          setSelectedTopics([]);
+          await loadTopics();
+        } catch (error) {
+          console.error('Errore nell\'eliminazione multipla:', error);
+        }
+      },
+      'Elimina'
+    );
+  };
+
   const handleGenerateDetails = async () => {
     if (!formData.originalSuggestion) return;
     setIsGenerating(true);
@@ -256,7 +334,11 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
     const matchesTag = tagSearch === '' || tags.some(tag =>
       tag.toLowerCase().includes(tagSearch.toLowerCase())
     );
-    return matchesText && matchesTag;
+
+    // Aggiunta del filtro stato locale per assicurarsi che funzioni
+    const matchesStatus = statusFilter === 'all' || topic.status === statusFilter;
+
+    return matchesText && matchesTag && matchesStatus;
   });
 
   // Paginazione
@@ -420,6 +502,53 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
           </div>
         </div>
 
+        {/* Barra azioni bulk - visibile solo quando ci sono elementi selezionati */}
+        {selectedTopics.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <span className="text-sm font-medium text-blue-900">
+                  {selectedTopics.length} argomenti selezionati
+                </span>
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm font-medium text-blue-900">Cambia stato a:</label>
+                  <select
+                    value={bulkAction}
+                    onChange={(e) => setBulkAction(e.target.value as any)}
+                    className="text-xs border border-blue-300 rounded px-2 py-1 bg-white"
+                  >
+                    <option value="">Seleziona stato...</option>
+                    <option value="pending">⏳ In attesa</option>
+                    <option value="approved">✅ Approvato</option>
+                    <option value="converted">💎 Convertito</option>
+                  </select>
+                  <button
+                    onClick={handleBulkStatusChange}
+                    disabled={!bulkAction}
+                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
+                  >
+                    Applica
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={handleBulkDelete}
+                  className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+                >
+                  🗑️ Elimina selezionati
+                </button>
+                <button
+                  onClick={() => setSelectedTopics([])}
+                  className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 transition-colors"
+                >
+                  Deseleziona tutto
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Tabella */}
         {loading ? (
           <div className="flex justify-center items-center h-64">
@@ -433,7 +562,16 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Argomento
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedTopics.length === currentTopics.length && selectedTopics.length > 0}
+                          onChange={handleSelectAll}
+                          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          aria-label="Seleziona tutti"
+                        />
+                        <span className="ml-2">Argomento</span>
+                      </div>
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Tag
@@ -453,11 +591,32 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
                   {currentTopics.map((topic) => (
                     <tr key={topic.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
-                        <div className="text-sm font-bold text-gray-900 max-w-md">
-                          {topic.title}
-                        </div>
-                        <div className="text-sm text-gray-600 max-w-md mt-1">
-                          {topic.objective}
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedTopics.includes(topic.id)}
+                            onChange={() => handleSelectTopic(topic.id)}
+                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            aria-label={`Seleziona ${topic.title}`}
+                          />
+                          <div className="ml-2 flex items-center space-x-2">
+                            <div className="text-sm font-bold text-gray-900 max-w-md">
+                              {topic.title}
+                            </div>
+                            {/* Icona per mostrare l'objective al hover */}
+                            <div className="relative group">
+                              <div className="w-5 h-5 bg-blue-100 hover:bg-blue-200 rounded-full flex items-center justify-center cursor-help transition-colors">
+                                <span className="text-xs text-blue-600 font-bold">?</span>
+                              </div>
+                              {/* Tooltip con l'objective - più largo per migliore leggibilità */}
+                              <div className="absolute left-0 top-6 z-10 invisible group-hover:visible bg-gray-800 text-white text-sm rounded-lg px-4 py-3 shadow-lg w-96 max-w-screen-sm">
+                                <div className="font-semibold mb-2">Obiettivo argomento:</div>
+                                <div className="leading-relaxed">{topic.objective}</div>
+                                {/* Freccia del tooltip */}
+                                <div className="absolute -top-1 left-3 w-2 h-2 bg-gray-800 transform rotate-45"></div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
