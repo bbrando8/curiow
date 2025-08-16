@@ -6,6 +6,7 @@ import {
   setDoc,
   updateDoc,
   addDoc,
+  deleteDoc,
   query,
   limit,
   onSnapshot,
@@ -450,5 +451,80 @@ export const searchChannels = async (searchTerm: string): Promise<(Channel & { i
   } catch (error) {
     console.error("Error searching channels:", error);
     return [];
+  }
+};
+
+// Aggiunte funzioni per gestione gems
+export const fetchAllGems = async (): Promise<(Gem & { id: string })[]> => {
+  try {
+    const gemsCollection = collection(db, 'gems');
+    const q = query(gemsCollection, orderBy('title', 'asc'));
+    const gemSnapshot = await getDocs(q);
+    return gemSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), userQuestions: [] } as Gem & { id: string }));
+  } catch (error) {
+    console.error("Error fetching all gems:", error);
+    return [];
+  }
+};
+
+export const searchGems = async (searchTerm: string): Promise<(Gem & { id: string })[]> => {
+  try {
+    const gemsCollection = collection(db, 'gems');
+    const snapshot = await getDocs(gemsCollection);
+    const allGems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Gem & { id: string }));
+
+    return allGems.filter(gem =>
+      gem.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      gem.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      gem.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  } catch (error) {
+    console.error("Error searching gems:", error);
+    return [];
+  }
+};
+
+export const createGem = async (gemData: Omit<Gem, 'id'>): Promise<string> => {
+  try {
+    const gemsCollection = collection(db, 'gems');
+    const docRef = await addDoc(gemsCollection, gemData);
+    return docRef.id;
+  } catch (error) {
+    console.error("Error creating gem:", error);
+    throw error;
+  }
+};
+
+export const updateGem = async (gemId: string, gemData: Partial<Gem>): Promise<void> => {
+  try {
+    const gemDocRef = doc(db, 'gems', gemId);
+    await updateDoc(gemDocRef, gemData);
+  } catch (error) {
+    console.error("Error updating gem:", error);
+    throw error;
+  }
+};
+
+export const deleteGem = async (gemId: string): Promise<void> => {
+  try {
+    const gemDocRef = doc(db, 'gems', gemId);
+    await deleteDoc(gemDocRef);
+  } catch (error) {
+    console.error("Error deleting gem:", error);
+    throw error;
+  }
+};
+
+export const getGemById = async (gemId: string): Promise<(Gem & { id: string }) | null> => {
+  try {
+    const gemDocRef = doc(db, 'gems', gemId);
+    const gemDoc = await getDoc(gemDocRef);
+    if (gemDoc.exists()) {
+      return { id: gemDoc.id, ...gemDoc.data(), userQuestions: [] } as Gem & { id: string };
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching gem by id:", error);
+    return null;
   }
 };

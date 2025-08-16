@@ -1,36 +1,29 @@
 import React, { useState } from 'react';
 import { User, UserRole } from '../../types';
 import { useUserPermissions } from '../../services/roleService';
-import ProfileView from '../ProfileView';
 import UserManagement from './UserManagement';
 import TopicManagement from './TopicManagement';
 import FeedbackManagement from './FeedbackManagement';
 import ChannelManagement from './ChannelManagement';
+import GemsManagement from './GemsManagement';
 
 interface AdminDashboardProps {
   currentUser: User & { id: string } | null;
   onClose: () => void;
 }
 
-type DashboardView = 'profile' | 'users' | 'topics' | 'feedback' | 'channels';
+type DashboardView = 'users' | 'topics' | 'feedback' | 'channels' | 'gems';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose }) => {
-  const [activeView, setActiveView] = useState<DashboardView>('profile');
+  const [activeView, setActiveView] = useState<DashboardView>('gems');
   const permissions = useUserPermissions(currentUser);
 
   const menuItems = [
     {
-      id: 'profile' as DashboardView,
-      label: 'Il Mio Profilo',
-      icon: '👤',
-      description: 'Visualizza e modifica il tuo profilo',
-      allowedForAll: true,
-    },
-    {
-      id: 'topics' as DashboardView,
-      label: 'Gestione Argomenti',
-      icon: '💡',
-      description: 'Crea e gestisci gli argomenti per le gemme',
+      id: 'gems' as DashboardView,
+      label: 'Gestione Gems',
+      icon: '💎',
+      description: 'Gestisci le gems e i loro contenuti',
       allowedForAll: false,
       requiresAdmin: true,
     },
@@ -43,10 +36,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose })
       requiresAdmin: true,
     },
     {
-      id: 'feedback' as DashboardView,
-      label: 'Feedback Tester',
-      icon: '💬',
-      description: 'Visualizza e gestisci i feedback dei betatester',
+      id: 'topics' as DashboardView,
+      label: 'Gestione Argomenti',
+      icon: '💡',
+      description: 'Crea e gestisci gli argomenti per le gemme',
       allowedForAll: false,
       requiresAdmin: true,
     },
@@ -57,6 +50,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose })
       description: 'Gestisci i canali per le trasmissioni',
       allowedForAll: false,
       requiresChannelPermission: true,
+    },
+    {
+      id: 'feedback' as DashboardView,
+      label: 'Feedback Tester',
+      icon: '💬',
+      description: 'Visualizza e gestisci i feedback dei betatester',
+      allowedForAll: false,
+      requiresAdmin: true,
     },
   ];
 
@@ -69,46 +70,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose })
   const renderActiveView = () => {
     if (!currentUser) return null;
 
-    // Converti currentUser nel formato che si aspetta ProfileView
-    const userForProfileView: User = {
-      firstName: currentUser.firstName,
-      lastName: currentUser.lastName,
-      email: currentUser.email,
-      role: currentUser.role,
-      permissions: currentUser.permissions,
-      createdAt: currentUser.createdAt,
-      lastLoginAt: currentUser.lastLoginAt
-    };
-
     switch (activeView) {
-      case 'profile':
-        return (
-          <ProfileView
-            user={userForProfileView}
-            onUpdateUser={(updatedUser) => {
-              // TODO: Implementare aggiornamento utente nel dashboard
-              console.log('Aggiornamento utente nel dashboard:', updatedUser);
-            }}
-            onBack={onClose} // Corretto: torna al feed principale
-            onNavigate={() => {}} // Non naviga fuori dal dashboard
-          />
-        );
       case 'users':
-        return permissions.isAdmin ? <UserManagement currentUser={currentUser} onBack={onClose} /> : null;
+        return permissions.isAdmin ? <UserManagement currentUser={currentUser} onBack={() => setActiveView('gems')} /> : null;
       case 'topics':
         return permissions.isAdmin ? (
           <TopicManagement
             currentUser={{ ...currentUser, uid: currentUser.id }}
-            onBack={() => setActiveView('profile')}
+            onBack={() => setActiveView('gems')}
           />
         ) : null;
       case 'feedback':
-        return permissions.isAdmin ? <FeedbackManagement onBack={() => setActiveView('profile')} /> : null;
+        return permissions.isAdmin ? <FeedbackManagement onBack={() => setActiveView('gems')} /> : null;
       case 'channels':
         return permissions.canManageChannels ? (
           <ChannelManagement
             currentUser={currentUser}
-            onBack={() => setActiveView('profile')}
+            onBack={() => setActiveView('gems')}
+          />
+        ) : null;
+      case 'gems':
+        return permissions.isAdmin ? (
+          <GemsManagement
+            currentUser={currentUser}
+            onBack={() => setActiveView('gems')}
           />
         ) : null;
       default:
@@ -164,23 +149,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose })
           </div>
 
           {/* Menu */}
-          <nav className="flex-1 p-4">
-            <ul className="space-y-2">
+          <nav className="flex-1 p-3">
+            <ul className="space-y-1">
               {visibleMenuItems.map((item) => (
                 <li key={item.id}>
                   <button
                     onClick={() => setActiveView(item.id)}
-                    className={`w-full text-left p-4 rounded-lg transition-colors ${
+                    className={`w-full text-left p-3 rounded-lg transition-colors ${
                       activeView === item.id
                         ? 'bg-blue-50 text-blue-700 border border-blue-200'
                         : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
                     }`}
                   >
                     <div className="flex items-center space-x-3">
-                      <span className="text-2xl">{item.icon}</span>
+                      <span className="text-xl">{item.icon}</span>
                       <div>
-                        <p className="font-medium">{item.label}</p>
-                        <p className="text-sm text-gray-500">{item.description}</p>
+                        <p className="font-medium text-sm">{item.label}</p>
+                        <p className="text-xs text-gray-500">{item.description}</p>
                       </div>
                     </div>
                   </button>
