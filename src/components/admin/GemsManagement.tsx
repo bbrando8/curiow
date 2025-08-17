@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Gem, Topic, Channel } from '../../types';
+import { Gem, Topic, Channel, GemContent } from '../../types';
 import {
   fetchAllGems,
   createGem,
@@ -181,11 +181,11 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
     setFormData({
       title: gem.title || '',
       description: gem.description || '',
-      channelId: gem.channelId || '',
+      channelId: (gem as any).channelId || '',
       imageUrl: gem.imageUrl || '',
       tags: gem.tags || [],
       suggestedQuestions: gem.suggestedQuestions || [],
-      sources: gem.sources || []
+      sources: (gem.search_results && gem.search_results.length > 0 ? gem.search_results : gem.sources) || []
     });
     setEditingGem(gem);
   };
@@ -198,6 +198,88 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
       newExpanded.add(gemId);
     }
     setExpandedGems(newExpanded);
+  };
+
+  const renderStructuredContentSummary = (content: GemContent) => {
+    if (!content || !(content as any).template) return null;
+    const tpl = (content as any).template;
+    switch (tpl) {
+      case 'mini_thread': {
+        const steps = (content as any).steps || [];
+        return (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase">Mini Thread</p>
+            <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+              {steps.map((s: any, i: number) => <li key={i}><span className="font-medium">{s.title}</span>{s.body ? ': ' + s.body : ''}</li>)}
+            </ol>
+            {(content as any).payoff && <p className="text-sm mt-2"><span className="font-semibold">Payoff: </span>{(content as any).payoff}</p>}
+          </div>
+        );
+      }
+      case 'myth_vs_reality': {
+        return (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase">Myth vs Reality</p>
+            <p className="text-sm"><span className="font-semibold text-red-600">Mito: </span>{(content as any).myth}</p>
+            <p className="text-sm"><span className="font-semibold text-emerald-600">Realtà: </span>{(content as any).reality}</p>
+            {(content as any).evidence && <p className="text-xs text-gray-600">Evidenze: {(content as any).evidence}</p>}
+            {(content as any).why_it_matters && <p className="text-xs text-gray-600">Perché conta: {(content as any).why_it_matters}</p>}
+          </div>
+        );
+      }
+      case 'fact_card': {
+        return (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase">Fact Card</p>
+            {(content as any).hook && <p className="text-sm font-medium">Hook: {(content as any).hook}</p>}
+            {Array.isArray((content as any).facts) && (content as any).facts.length > 0 && (
+              <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                {(content as any).facts.map((f: string, i: number) => <li key={i}>{f}</li>)}
+              </ul>
+            )}
+            {(content as any).implication && <p className="text-xs text-gray-600">Implicazione: {(content as any).implication}</p>}
+            {(content as any).action && <p className="text-xs text-gray-600">Azione: {(content as any).action}</p>}
+          </div>
+        );
+      }
+      case 'pros_cons': {
+        return (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase">Pros & Cons</p>
+            {(content as any).scenario && <p className="text-sm"><span className="font-semibold">Scenario: </span>{(content as any).scenario}</p>}
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <p className="font-semibold text-emerald-600 mb-1">Pro</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  {((content as any).pros || []).map((p: string, i: number) => <li key={i}>{p}</li>)}
+                </ul>
+              </div>
+              <div>
+                <p className="font-semibold text-rose-600 mb-1">Contro</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  {((content as any).cons || []).map((c: string, i: number) => <li key={i}>{c}</li>)}
+                </ul>
+              </div>
+            </div>
+            {(content as any).advice && <p className="text-xs text-gray-600">Consiglio: {(content as any).advice}</p>}
+          </div>
+        );
+      }
+      case 'quick_explainer': {
+        return (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase">Quick Explainer</p>
+            {(content as any).analogy && <p className="text-sm font-medium">Analogia: {(content as any).analogy}</p>}
+            {(content as any).definition && <p className="text-xs text-gray-700">Definizione: {(content as any).definition}</p>}
+            {(content as any).example && <p className="text-xs text-gray-700">Esempio: {(content as any).example}</p>}
+            {(content as any).anti_example && <p className="text-xs text-gray-700">Non è: {(content as any).anti_example}</p>}
+            {(content as any).takeaway && <p className="text-xs text-gray-600">Takeaway: {(content as any).takeaway}</p>}
+          </div>
+        );
+      }
+      default:
+        return <p className="text-sm text-gray-700 whitespace-pre-wrap">{(content as any).raw || ''}</p>;
+    }
   };
 
   // Filtraggio e ordinamento
@@ -491,7 +573,7 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {gem.sources?.length || 0} fonti
+                          {((gem as any).search_results && (gem as any).search_results.length > 0 ? (gem as any).search_results : gem.sources)?.length || 0} fonti
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex justify-end space-x-2">
@@ -522,14 +604,17 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                       {expandedGems.has(gem.id) && (
                         <tr>
                           <td colSpan={5} className="px-6 py-4 bg-gray-50">
-                            <div className="max-w-none">
-                              <h4 className="text-sm font-medium text-gray-900 mb-2">Descrizione:</h4>
-                              <p className="text-sm text-gray-700 mb-4 whitespace-pre-wrap">
-                                {gem.description}
-                              </p>
-
+                            <div className="max-w-none space-y-4">
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-900 mb-2">Contenuto:</h4>
+                                {gem.content?.template ? (
+                                  <div className="p-3 border border-gray-200 rounded bg-white">{renderStructuredContentSummary(gem.content)}</div>
+                                ) : (
+                                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{gem.description}</p>
+                                )}
+                              </div>
                               {(gem.suggestedQuestions?.length || 0) > 0 && (
-                                <div className="mb-4">
+                                <div>
                                   <h4 className="text-sm font-medium text-gray-900 mb-2">Domande suggerite:</h4>
                                   <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
                                     {gem.suggestedQuestions?.map((question, index) => (
@@ -538,26 +623,25 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                                   </ul>
                                 </div>
                               )}
-
-                              {(gem.sources?.length || 0) > 0 && (
+                              {(() => { const sources = (gem as any).search_results && (gem as any).search_results.length > 0 ? (gem as any).search_results : gem.sources; return (sources?.length || 0) > 0 && (
                                 <div>
                                   <h4 className="text-sm font-medium text-gray-900 mb-2">Fonti:</h4>
                                   <ul className="space-y-1">
-                                    {gem.sources?.map((source, index) => (
+                                    {sources.map((source: any, index: number) => (
                                       <li key={index} className="text-sm">
                                         <a
                                           href={source.uri}
                                           target="_blank"
                                           rel="noopener noreferrer"
-                                          className="text-blue-600 hover:text-blue-800 underline"
+                                          className="text-blue-600 hover:text-blue-800 underline break-all"
                                         >
-                                          {source.title}
+                                          {source.title || source.uri}
                                         </a>
                                       </li>
                                     ))}
                                   </ul>
                                 </div>
-                              )}
+                              ); })()}
                             </div>
                           </td>
                         </tr>
@@ -829,11 +913,13 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
+        actionText="Elimina"
+        actionType="danger"
         onConfirm={() => {
           confirmModal.action();
           setConfirmModal({ ...confirmModal, isOpen: false });
         }}
-        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
       />
     </AdminPageLayout>
   );
