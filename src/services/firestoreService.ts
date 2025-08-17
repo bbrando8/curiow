@@ -132,7 +132,7 @@ export const listenToUserQuestions = (gemId: string, callback: (questions: UserQ
 
 export const fetchTopicSuggestions = async (status?: 'pending' | 'approved' | 'converted'): Promise<TopicSuggestion[]> => {
     try {
-        const topicsCollection = collection(db, 'topicSuggestions');
+        const topicsCollection = collection(db, 'topic_suggestions');
         let q = query(topicsCollection, orderBy('createdAt', 'desc'));
 
         if (status) {
@@ -157,15 +157,17 @@ export const createTopicSuggestion = async (
   objective: string,
   tags: string[],
   createdBy: string,
-  originalSuggestion?: string
+  originalSuggestion?: string,
+  channelId?: string
 ): Promise<void> => {
-  const topicsCollection = collection(db, 'topicSuggestions');
+  const topicsCollection = collection(db, 'topic_suggestions');
   await addDoc(topicsCollection, {
     title,
     objective,
     originalSuggestion: originalSuggestion || '',
     tags,
     createdBy,
+    channelId: channelId || '',
     status: 'pending',
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -173,12 +175,12 @@ export const createTopicSuggestion = async (
 };
 
 export const updateTopicSuggestion = async (id: string, data: Partial<TopicSuggestion>): Promise<void> => {
-    const topicDocRef = doc(db, 'topicSuggestions', id);
+    const topicDocRef = doc(db, 'topic_suggestions', id);
     await updateDoc(topicDocRef, { ...data, updatedAt: new Date() });
 };
 
 export const deleteTopicSuggestion = async (id: string): Promise<void> => {
-    const topicDocRef = doc(db, 'topicSuggestions', id);
+    const topicDocRef = doc(db, 'topic_suggestions', id);
     await updateDoc(topicDocRef, { deleted: true, updatedAt: new Date() });
 };
 

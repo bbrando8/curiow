@@ -281,7 +281,7 @@ async function seedDatabase() {
 
         // Seed Topic Suggestions
         console.log("\n💡 Caricamento argomenti di esempio...");
-        const topicsCollection = collection(db, 'topicSuggestions');
+        const topicsCollection = collection(db, 'topic_suggestions');
         for (const topic of sampleTopicSuggestions) {
             await addDoc(topicsCollection, topic);
             console.log(`✅ Argomento "${topic.text.substring(0, 50)}..." (${topic.status}) aggiunto.`);

@@ -9,6 +9,7 @@ export interface GeneratedTopicDetails {
   title: string;
   objective: string;
   tags: string[];
+  channelId?: string;
 }
 
 /**

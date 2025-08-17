@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { TopicSuggestion, UserRole } from '../../types';
+import { TopicSuggestion, UserRole, Channel } from '../../types';
 import {
   fetchTopicSuggestions,
   createTopicSuggestion,
   updateTopicSuggestion,
-  deleteTopicSuggestion
+  deleteTopicSuggestion,
+  fetchAllChannels
 } from '../../services/firestoreService';
 import { useUserPermissions } from '../../services/roleService';
 import { generateTopicSuggestionDetails } from '../../services/apiService';
@@ -59,6 +60,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 
 const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }) => {
   const [topics, setTopics] = useState<TopicSuggestion[]>([]);
+  const [channels, setChannels] = useState<(Channel & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTopic, setEditingTopic] = useState<TopicSuggestion | null>(null);
@@ -98,6 +100,7 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
     title: '',
     objective: '',
     tags: '',
+    channelId: '',
   });
 
   const permissions = useUserPermissions(currentUser);
@@ -105,6 +108,7 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
   useEffect(() => {
     if (!permissions.isAdmin) return;
     loadTopics();
+    loadChannels();
   }, [statusFilter, permissions.isAdmin]);
 
   const loadTopics = async () => {
@@ -118,6 +122,15 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
       console.error('Errore nel caricamento argomenti:', error);
     }
     setLoading(false);
+  };
+
+  const loadChannels = async () => {
+    try {
+      const fetchedChannels = await fetchAllChannels();
+      setChannels(fetchedChannels);
+    } catch (error) {
+      console.error('Errore nel caricamento canali:', error);
+    }
   };
 
   const showConfirmation = (title: string, message: string, action: () => void, actionText: string) => {
@@ -252,6 +265,7 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
         title: details.title || '',
         objective: details.objective || '',
         tags: Array.isArray(details.tags) ? details.tags.join(', ') : '',
+        channelId: details.channelId || '',
       }));
     } catch (error) {
       console.error('Errore nella generazione dei dettagli:', error);
@@ -273,7 +287,8 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
         formData.objective,
         tags,
         currentUser.uid,
-        formData.originalSuggestion
+        formData.originalSuggestion,
+        formData.channelId
       );
 
       setShowCreateModal(false); // Chiudi la modale
@@ -293,6 +308,7 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
         title: formData.title,
         objective: formData.objective,
         tags,
+        channelId: formData.channelId,
       });
       setEditingTopic(null); // Chiudi la modale di modifica
       await loadTopics();
@@ -308,11 +324,12 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
       objective: topic.objective,
       tags: topic.tags.join(', '),
       originalSuggestion: topic.originalSuggestion || '',
+      channelId: topic.channelId || '',
     });
   };
 
   const resetForm = () => {
-    setFormData({ originalSuggestion: '', title: '', objective: '', tags: '' });
+    setFormData({ originalSuggestion: '', title: '', objective: '', tags: '', channelId: '' });
     setEditingTopic(null);
     setShowCreateModal(false);
   };
@@ -779,6 +796,26 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
 
                   {(formData.title || editingTopic) && (
                     <>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Canale
+                        </label>
+                        <select
+                          value={formData.channelId}
+                          onChange={(e) => setFormData({...formData, channelId: e.target.value})}
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="">Seleziona un canale...</option>
+                          {channels.map(channel => (
+                            <option key={channel.id} value={channel.id}>{channel.name}</option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Seleziona il canale in cui pubblicare l'argomento
+                        </p>
+                      </div>
+
                       <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Titolo
