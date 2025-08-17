@@ -97,7 +97,8 @@ export interface Gem {
   userQuestions: UserQuestion[];
   tags: string[];
   suggestedQuestions: string[];
-  sources: Source[];
+  sources: Source[]; // legacy / backdoor
+  search_results?: Source[]; // nuovo campo principale per le fonti
   content?: GemContent; // nuovo campo opzionale per template strutturati
 }
 

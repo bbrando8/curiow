@@ -294,52 +294,8 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                   <p className="mt-6 text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{gem.description}</p>
                 ); })()}
 
-                <section className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6">
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center">
-                        <PlusCircleIcon className="w-6 h-6 mr-2 text-indigo-500"/>
-                        Approfondisci
-                    </h2>
-                    
-                    {gem.suggestedQuestions && gem.suggestedQuestions.length > 0 && (
-                        <div className="mt-4 p-4 bg-indigo-50 dark:bg-slate-800/50 rounded-lg">
-                            <h3 className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">Spunti di riflessione:</h3>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                                {gem.suggestedQuestions.map((q, i) => (
-                                    <button 
-                                        key={i} 
-                                        onClick={() => setUserQuestion(q)}
-                                        className="px-2.5 py-1 bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-medium border border-indigo-200 dark:border-slate-600 hover:bg-indigo-100 dark:hover:bg-slate-600 transition-colors"
-                                    >
-                                       " {q} "
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-4">Fai una domanda per scoprire di più.</p>
-                    <form onSubmit={handleUserQuestionSubmit} className="mt-2 flex items-center space-x-2">
-                        <input
-                            type="text"
-                            value={userQuestion}
-                            onChange={(e) => setUserQuestion(e.target.value)}
-                            placeholder="Fai una domanda su questo argomento..."
-                            className="flex-grow bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-full py-2 px-4 text-sm text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        <button type="submit" className="p-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-colors disabled:bg-indigo-400 disabled:cursor-not-allowed" disabled={!userQuestion.trim()}>
-                            <PaperAirplaneIcon className="w-5 h-5"/>
-                        </button>
-                    </form>
-
-                    {gem.userQuestions.length > 0 && (
-                        <div className="mt-6">
-                            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Approfondimenti precedenti:</h3>
-                            {gem.userQuestions.map(dd => <UserQuestionItem key={dd.id} userQuestion={dd} />)}
-                        </div>
-                    )}
-                </section>
-                
-                {gem.sources && gem.sources.length > 0 && (
+                {/* Fonti: usa search_results con fallback a sources */}
+                {(() => { const sources = (gem as any).search_results && (gem as any).search_results.length > 0 ? (gem as any).search_results : gem.sources; return sources && sources.length > 0 && (
                     <section className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6">
                          <button
                             onClick={() => setIsSourcesOpen(!isSourcesOpen)}
@@ -354,7 +310,7 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                         </button>
                         {isSourcesOpen && (
                             <ul className="mt-3 space-y-2">
-                                {gem.sources.map((source, index) => (
+                                {sources.map((source: any, index: number) => (
                                     <li key={index}>
                                         <a 
                                             href={source.uri} 
@@ -369,7 +325,7 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                             </ul>
                         )}
                     </section>
-                )}
+                ); })()}
             </div>
         </article>
     </div>
