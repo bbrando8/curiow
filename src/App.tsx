@@ -17,6 +17,7 @@ import FeedbackModal from './components/FeedbackModal';
 import OnboardingModal from './components/OnboardingModal';
 import { SparklesIcon } from './components/icons';
 import SaveToListModal from './components/SaveToListModal';
+import AdminConfirmationModal from './components/admin/AdminConfirmationModal';
 // Import admin utils in development
 import './utils/adminUtils';
 import './utils/migratePermissions';
@@ -44,6 +45,8 @@ const App: React.FC = () => {
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [gemToSaveId, setGemToSaveId] = useState<string | null>(null);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [gemToRemoveId, setGemToRemoveId] = useState<string | null>(null);
 
   // Stati per la modale di onboarding
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
@@ -206,6 +209,32 @@ const App: React.FC = () => {
   const handleSaveRequest = (gemId: string) => {
     setGemToSaveId(gemId);
     setIsSaveModalOpen(true);
+  };
+
+  const handleRemoveRequest = (gemId: string) => {
+    setGemToRemoveId(gemId);
+    setShowRemoveConfirm(true);
+  };
+
+  const handleConfirmRemove = async () => {
+    if (!firebaseUser || !gemToRemoveId) return;
+    try {
+      const containingLists = userLists.filter(l => l.gemIds.includes(gemToRemoveId));
+      for (const list of containingLists) {
+        await firestoreService.removeGemFromUserList(firebaseUser.uid, list.id, gemToRemoveId);
+      }
+      // Aggiorna stato locale
+      const updatedLists = userLists.map(list => list.gemIds.includes(gemToRemoveId)
+        ? { ...list, gemIds: list.gemIds.filter(id => id !== gemToRemoveId), itemCount: list.itemCount - 1, updatedAt: new Date() }
+        : list);
+      setUserLists(updatedLists);
+    } catch (e) {
+      console.error('Errore rimozione gem:', e);
+      alert('Errore nella rimozione dalla lista');
+    } finally {
+      setGemToRemoveId(null);
+      setShowRemoveConfirm(false);
+    }
   };
 
   // Aggiorna le liste dell'utente con la nuova struttura
@@ -475,6 +504,7 @@ const App: React.FC = () => {
                           isLoggedIn={!!firebaseUser}
                           isFavorite={allFavoriteIds.includes(gem.id)}
                           onSaveRequest={handleSaveRequest}
+                          onRemoveRequest={handleRemoveRequest}
                           onSelect={handleSelectGem}
                           onLoginRequest={handleLoginRequest}
                         />
@@ -626,10 +656,23 @@ const App: React.FC = () => {
                     isFavorite={allFavoriteIds.includes(selectedGem.id)}
                     onBack={handleBackToFeed}
                     onSaveRequest={handleSaveRequest}
+                    onRemoveRequest={handleRemoveRequest}
                     onAddUserQuestion={handleAddUserQuestion}
                     onTagSelect={handleSelectTag}
                 />
             </div>
+        )}
+
+        {showRemoveConfirm && gemToRemoveId && (
+          <AdminConfirmationModal
+            isOpen={showRemoveConfirm}
+            onClose={() => { setShowRemoveConfirm(false); setGemToRemoveId(null); }}
+            onConfirm={handleConfirmRemove}
+            title="Rimuovi dalla/e lista/e"
+            message="Questa gem verrà rimossa da tutte le tue liste in cui è presente. Confermi?"
+            actionText="Rimuovi"
+            actionType="danger"
+          />
         )}
     </div>
   );

@@ -7,6 +7,7 @@ interface GemDetailViewProps {
   isFavorite: boolean;
   onBack: () => void;
   onSaveRequest: (gemId: string) => void;
+  onRemoveRequest: (gemId: string) => void;
   onAddUserQuestion: (gemId: string, question: string) => void;
   onTagSelect: (tag: string) => void;
 }
@@ -27,7 +28,7 @@ const UserQuestionItem: React.FC<{ userQuestion: UserQuestion }> = ({ userQuesti
     </div>
 );
 
-const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, onSaveRequest, onAddUserQuestion, onTagSelect }) => {
+const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, onSaveRequest, onRemoveRequest, onAddUserQuestion, onTagSelect }) => {
   const [userQuestion, setUserQuestion] = useState('');
   const [isSourcesOpen, setIsSourcesOpen] = useState(false);
 
@@ -259,11 +260,11 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                 
                 <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 items-center">
                     <button
-                        onClick={() => onSaveRequest(gem.id)}
+                        onClick={() => isFavorite ? onRemoveRequest(gem.id) : onSaveRequest(gem.id)}
                         className="flex items-center space-x-1.5 text-slate-600 dark:text-slate-300 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                     >
                         <HeartIcon className={`w-6 h-6 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
-                        <span className="text-sm font-medium">{isFavorite ? 'Salvato' : 'Salva'}</span>
+                        <span className="text-sm font-medium">{isFavorite ? 'Rimuovi' : 'Salva'}</span>
                     </button>
                     <button
                         onClick={handleShare}

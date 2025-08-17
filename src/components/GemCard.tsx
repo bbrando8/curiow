@@ -7,12 +7,13 @@ interface GemCardProps {
   isLoggedIn: boolean;
   isFavorite: boolean;
   onSaveRequest: (gemId: string) => void;
+  onRemoveRequest: (gemId: string) => void;
   onSelect: (gemId: string) => void;
   onLoginRequest: () => void;
   onView?: () => void; // Nuova prop per tracciare le visualizzazioni
 }
 
-const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRequest, onSelect, onLoginRequest, onView }) => {
+const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRequest, onRemoveRequest, onSelect, onLoginRequest, onView }) => {
 
   const handleCardClick = () => {
     if (!isLoggedIn) {
@@ -27,7 +28,11 @@ const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRe
     if (!isLoggedIn) {
         onLoginRequest();
     } else {
-        onSaveRequest(gem.id);
+        if (isFavorite) {
+          onRemoveRequest(gem.id);
+        } else {
+          onSaveRequest(gem.id);
+        }
     }
   };
 
