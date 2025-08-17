@@ -35,6 +35,59 @@ export interface Source {
     title: string;
 }
 
+// ---- Nuovi tipi contenuto Gem ----
+export interface MiniThreadContentStep {
+  title: string;
+  body: string;
+}
+export interface MiniThreadContent {
+  template: 'mini_thread';
+  steps: MiniThreadContentStep[];
+  payoff: string;
+  claims_to_verify?: string[];
+}
+export interface MythVsRealityContent {
+  template: 'myth_vs_reality';
+  myth: string;
+  reality: string;
+  evidence: string;
+  why_it_matters: string;
+  claims_to_verify?: string[];
+}
+export interface FactCardContent {
+  template: 'fact_card';
+  hook: string;
+  facts: string[];
+  implication: string;
+  action: string;
+  claims_to_verify?: string[];
+}
+export interface ProsConsContent {
+  template: 'pros_cons';
+  scenario: string;
+  pros: string[];
+  cons: string[];
+  advice: string;
+  claims_to_verify?: string[];
+}
+export interface QuickExplainerContent {
+  template: 'quick_explainer';
+  analogy: string;
+  definition: string;
+  example: string;
+  anti_example: string;
+  takeaway: string;
+  claims_to_verify?: string[];
+}
+export type GemContent =
+  MiniThreadContent |
+  MythVsRealityContent |
+  FactCardContent |
+  ProsConsContent |
+  QuickExplainerContent |
+  { template: string; [key: string]: any };
+// ---- fine nuovi tipi ----
+
 export interface Gem {
   id:string;
   topic: Topic;
@@ -45,6 +98,7 @@ export interface Gem {
   tags: string[];
   suggestedQuestions: string[];
   sources: Source[];
+  content?: GemContent; // nuovo campo opzionale per template strutturati
 }
 
 export interface Channel {

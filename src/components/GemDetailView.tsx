@@ -44,6 +44,200 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
     alert("Contenuto copiato negli appunti!");
   };
 
+  // --- Rendering contenuti template ---
+  const renderMiniThread = (content: any) => {
+    const steps = Array.isArray(content.steps) ? content.steps : [];
+    return (
+      <div className="mt-6 space-y-6">
+        <div className="space-y-4">
+          {steps.map((s: any, idx: number) => (
+            <div key={idx} className="relative pl-10">
+              <div className="absolute left-0 top-0 flex flex-col items-center">
+                <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm font-semibold shadow">{idx+1}</div>
+                {idx < steps.length -1 && <div className="flex-1 w-px bg-gradient-to-b from-indigo-400 via-indigo-300 to-transparent mt-1"/>}
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{s.title}</h3>
+              <p className="mt-1 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{s.body}</p>
+            </div>
+          ))}
+        </div>
+        {content.payoff && (
+          <div className="p-5 rounded-xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-indigo-500/10 border border-emerald-400/30 dark:border-emerald-400/20">
+            <div className="flex items-start">
+              <SparklesIcon className="w-6 h-6 text-emerald-500 mr-3 mt-0.5"/>
+              <div>
+                <p className="text-sm uppercase tracking-wide font-semibold text-emerald-600 dark:text-emerald-400">Payoff</p>
+                <p className="mt-1 font-medium text-slate-900 dark:text-slate-100 leading-relaxed">{content.payoff}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderMythVsReality = (content: any) => {
+    return (
+      <div className="mt-6 space-y-6">
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="p-5 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
+            <p className="text-xs font-bold uppercase tracking-wide text-rose-600 dark:text-rose-300">Mito</p>
+            <p className="mt-2 text-rose-800 dark:text-rose-200 font-medium leading-relaxed whitespace-pre-wrap">{content.myth}</p>
+          </div>
+          <div className="p-5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 relative overflow-hidden">
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_80%_20%,rgba(16,185,129,0.15),transparent_60%)]"/>
+            <p className="text-xs font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">Realtà</p>
+            <p className="mt-2 text-emerald-800 dark:text-emerald-200 font-medium leading-relaxed whitespace-pre-wrap">{content.reality}</p>
+          </div>
+        </div>
+        {content.evidence && (
+          <div className="p-4 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Evidenze</p>
+            <p className="mt-1 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{content.evidence}</p>
+          </div>
+        )}
+        {content.why_it_matters && (
+          <div className="p-5 rounded-xl bg-gradient-to-r from-indigo-500/10 via-violet-500/10 to-fuchsia-500/10 border border-indigo-300/30 dark:border-indigo-300/20">
+            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Perché conta</p>
+            <p className="mt-2 font-medium text-slate-900 dark:text-slate-100 leading-relaxed whitespace-pre-wrap">{content.why_it_matters}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderFactCard = (content: any) => {
+    const facts: string[] = Array.isArray(content.facts) ? content.facts : [];
+    return (
+      <div className="mt-6 space-y-5">
+        {content.hook && (
+          <div className="p-5 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow">
+            <p className="text-sm font-semibold tracking-wide uppercase opacity-90">Dato Chiave</p>
+            <p className="mt-1 text-lg leading-snug font-bold whitespace-pre-wrap">{content.hook}</p>
+          </div>
+        )}
+        {facts.length > 0 && (
+          <div className="grid gap-3">
+            {facts.map((f, i) => (
+              <div key={i} className="p-4 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex">
+                <div className="mr-3 mt-0.5 text-indigo-500 font-semibold text-xs">FACT {i+1}</div>
+                <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{f}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {content.implication && (
+          <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Implicazione</p>
+            <p className="mt-1 text-sm text-amber-900 dark:text-amber-100 whitespace-pre-wrap leading-relaxed">{content.implication}</p>
+          </div>
+        )}
+        {content.action && (
+          <div className="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Azione</p>
+            <p className="mt-1 text-sm font-medium text-emerald-900 dark:text-emerald-100 whitespace-pre-wrap leading-relaxed">{content.action}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderProsCons = (content: any) => {
+    const pros: string[] = Array.isArray(content.pros) ? content.pros : [];
+    const cons: string[] = Array.isArray(content.cons) ? content.cons : [];
+    return (
+      <div className="mt-6 space-y-6">
+        {content.scenario && (
+          <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Scenario</p>
+            <p className="mt-1 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{content.scenario}</p>
+          </div>
+        )}
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="p-5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+            <p className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Pro</p>
+            <ul className="mt-2 space-y-2 text-sm text-emerald-900 dark:text-emerald-100">
+              {pros.map((p,i)=>(<li key={i} className="flex"><span className="mr-2 text-emerald-500 font-semibold">+</span><span className="flex-1 whitespace-pre-wrap leading-relaxed">{p}</span></li>))}
+              {pros.length===0 && <li className="text-emerald-700/70 dark:text-emerald-300/60 italic">Nessun pro indicato.</li>}
+            </ul>
+          </div>
+          <div className="p-5 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
+            <p className="text-xs font-bold uppercase tracking-wide text-rose-700 dark:text-rose-300">Contro</p>
+            <ul className="mt-2 space-y-2 text-sm text-rose-900 dark:text-rose-100">
+              {cons.map((c,i)=>(<li key={i} className="flex"><span className="mr-2 text-rose-500 font-semibold">-</span><span className="flex-1 whitespace-pre-wrap leading-relaxed">{c}</span></li>))}
+              {cons.length===0 && <li className="text-rose-700/70 dark:text-rose-300/60 italic">Nessun contro indicato.</li>}
+            </ul>
+          </div>
+        </div>
+        {content.advice && (
+          <div className="p-5 rounded-xl bg-gradient-to-r from-indigo-500/10 via-sky-500/10 to-emerald-500/10 border border-indigo-300/30 dark:border-indigo-300/20">
+            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Sintesi / Consiglio</p>
+            <p className="mt-2 font-medium text-slate-900 dark:text-slate-100 whitespace-pre-wrap leading-relaxed">{content.advice}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderQuickExplainer = (content: any) => {
+    return (
+      <div className="mt-6 space-y-6">
+        {content.analogy && (
+          <div className="p-5 rounded-xl bg-indigo-600 text-white shadow">
+            <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Analogia Guida</p>
+            <p className="mt-2 text-lg font-bold leading-snug whitespace-pre-wrap">{content.analogy}</p>
+          </div>
+        )}
+        {content.definition && (
+          <div className="p-4 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Definizione</p>
+            <p className="mt-1 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{content.definition}</p>
+          </div>
+        )}
+        <div className="grid md:grid-cols-2 gap-4">
+          {content.example && (
+            <div className="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Esempio</p>
+              <p className="mt-1 text-sm text-emerald-900 dark:text-emerald-100 whitespace-pre-wrap leading-relaxed">{content.example}</p>
+            </div>
+          )}
+          {content.anti_example && (
+            <div className="p-4 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
+              <p className="text-xs font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">Non È Questo</p>
+              <p className="mt-1 text-sm text-rose-900 dark:text-rose-100 whitespace-pre-wrap leading-relaxed">{content.anti_example}</p>
+            </div>
+          )}
+        </div>
+        {content.takeaway && (
+            <div className="p-5 rounded-xl bg-gradient-to-r from-fuchsia-500/10 via-violet-500/10 to-indigo-500/10 border border-fuchsia-300/30 dark:border-fuchsia-300/20">
+              <p className="text-xs font-semibold uppercase tracking-wide text-fuchsia-600 dark:text-fuchsia-300">Takeaway</p>
+              <p className="mt-2 font-medium text-slate-900 dark:text-slate-100 whitespace-pre-wrap leading-relaxed">{content.takeaway}</p>
+            </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderStructuredContent = () => {
+    const content = (gem as any).content;
+    if (!content || !content.template) return null;
+    switch (content.template) {
+      case 'mini_thread':
+        return renderMiniThread(content);
+      case 'myth_vs_reality':
+        return renderMythVsReality(content);
+      case 'fact_card':
+        return renderFactCard(content);
+      case 'pros_cons':
+        return renderProsCons(content);
+      case 'quick_explainer':
+        return renderQuickExplainer(content);
+      default:
+        return null;
+    }
+  };
+  // --- fine rendering contenuti template ---
+
   return (
     <div className="max-w-2xl mx-auto">
         <header className="sticky top-0 z-10 flex items-center p-2 sm:p-4 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-200 dark:border-slate-700/50">
@@ -95,7 +289,10 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                     </div>
                 )}
 
-                <p className="mt-6 text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{gem.description}</p>
+                {/* Contenuto descrizione o template */}
+                {(() => { const structuredContent = renderStructuredContent(); return structuredContent ? structuredContent : (
+                  <p className="mt-6 text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{gem.description}</p>
+                ); })()}
 
                 <section className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6">
                     <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center">
