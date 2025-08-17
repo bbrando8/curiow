@@ -100,6 +100,7 @@ export interface Gem {
   sources: Source[]; // legacy / backdoor
   search_results?: Source[]; // nuovo campo principale per le fonti
   content?: GemContent; // nuovo campo opzionale per template strutturati
+  channelId?: string; // opzionale: riferimento al canale
 }
 
 export interface Channel {
@@ -108,6 +109,7 @@ export interface Channel {
     description: string;
     createdAt: Date;
     isActive: boolean;
+    emoji?: string; // opzionale: emoji per visualizzazione UI
 }
 
 export interface SavedList {

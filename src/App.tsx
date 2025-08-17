@@ -28,7 +28,7 @@ const App: React.FC = () => {
   const [gems, setGems] = useState<Gem[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [userLists, setUserLists] = useState<ListWithItems[]>([]);
@@ -38,7 +38,7 @@ const App: React.FC = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentView, setCurrentView] = useState<View>('feed');
   const [selectedGemId, setSelectedGemId] = useState<string | null>(null);
-  
+
   // Nuovo stato per la modale del dettaglio
   const [showGemDetailModal, setShowGemDetailModal] = useState(false);
 
@@ -380,12 +380,21 @@ const App: React.FC = () => {
   };
 
   const filteredGems = useMemo(() => {
-    if (filter.type === 'all') return gems;
-    if (filter.type === 'channel') return gems.filter(g => g.channelId === filter.id);
-    if (filter.type === 'topic') return gems.filter(g => g.topic === filter.id);
-    if (filter.type === 'tag') return gems.filter(g => g.tags?.includes(filter.id));
-    return gems;
-  }, [gems, filter]);
+    switch (filter.type) {
+      case 'all':
+        return gems;
+      case 'favorites':
+        return gems.filter(g => allFavoriteIds.includes(g.id));
+      case 'channel':
+        return gems.filter(g => g.channelId === filter.value);
+      case 'topic':
+        return gems.filter(g => g.topic === filter.value);
+      case 'tag':
+        return gems.filter(g => g.tags?.includes(filter.value));
+      default:
+        return gems;
+    }
+  }, [gems, filter, allFavoriteIds]);
 
   // Effetto per l'Intersection Observer della modale di onboarding
   useEffect(() => {

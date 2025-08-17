@@ -156,13 +156,6 @@ const Header: React.FC<HeaderProps> = ({ isLoggedIn, user, onLogin, onLogout, se
                         {channel.emoji} {channel.name}
                     </button>
                 ))}
-                <div className="border-l border-slate-300 dark:border-slate-600 h-6 mx-2"></div>
-                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Argomenti</span>
-                {TOPICS.map(topic => (
-                    <button key={topic} onClick={() => onSelectFilter({type: 'topic', value: topic})} className={getButtonClass({type: 'topic', value: topic})}>
-                        {topic.split(' ')[0]}
-                    </button>
-                ))}
             </nav>
         </div>
       </div>

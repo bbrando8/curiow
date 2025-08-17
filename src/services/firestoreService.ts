@@ -13,6 +13,7 @@ import {
   Unsubscribe,
   orderBy,
   where,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Gem, Channel, User, SavedList, UserQuestion, UserRole, TopicSuggestion, ListWithItems } from '../types';
@@ -509,8 +510,50 @@ export const updateGem = async (gemId: string, gemData: Partial<Gem>): Promise<v
 
 export const deleteGem = async (gemId: string): Promise<void> => {
   try {
+    // Elimina il documento principale della gem
     const gemDocRef = doc(db, 'gems', gemId);
     await deleteDoc(gemDocRef);
+
+    // Trova tutti i list_items che referenziano questa gem
+    const itemsQuery = query(
+      collection(db, 'list_items'),
+      where('gemId', '==', gemId)
+    );
+    const itemsSnapshot = await getDocs(itemsQuery);
+
+    if (!itemsSnapshot.empty) {
+      // Usiamo batch multipli se necessario per rimanere sotto il limite di 500 operazioni
+      let batch = writeBatch(db);
+      let ops = 0;
+      const affectedListIds = new Set<string>();
+
+      for (const itemDoc of itemsSnapshot.docs) {
+        batch.delete(itemDoc.ref);
+        ops++;
+        const data: any = itemDoc.data();
+        if (data.listId) affectedListIds.add(data.listId);
+        if (ops >= 450) { // commit parziale lasciando margine per update liste
+          await batch.commit();
+          batch = writeBatch(db);
+          ops = 0;
+        }
+      }
+
+      // Aggiorna updatedAt delle liste toccate
+      for (const listId of affectedListIds) {
+        batch.update(doc(db, 'lists', listId), { updatedAt: new Date() });
+        ops++;
+        if (ops >= 450) {
+          await batch.commit();
+          batch = writeBatch(db);
+          ops = 0;
+        }
+      }
+
+      if (ops > 0) {
+        await batch.commit();
+      }
+    }
   } catch (error) {
     console.error("Error deleting gem:", error);
     throw error;
