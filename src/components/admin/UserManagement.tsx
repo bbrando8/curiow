@@ -125,8 +125,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser, onBack }) 
     const roleLabels = {
       [UserRole.USER]: 'Utente',
       [UserRole.MODERATOR]: 'Moderatore',
-      [UserRole.ADMIN]: 'Amministratore'
-    };
+      [UserRole.ADMIN]: 'Amministratore',
+      [UserRole.BETATESTER]: 'Beta Tester'
+    } as const;
 
     showConfirmation(
       'Conferma cambio ruolo',
@@ -166,6 +167,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser, onBack }) 
     switch (role) {
       case UserRole.ADMIN: return 'bg-red-100 text-red-800 border-red-200';
       case UserRole.MODERATOR: return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case UserRole.BETATESTER: return 'bg-purple-100 text-purple-800 border-purple-200';
       case UserRole.USER: return 'bg-green-100 text-green-800 border-green-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
@@ -175,6 +177,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser, onBack }) 
     switch (role) {
       case UserRole.ADMIN: return '👑';
       case UserRole.MODERATOR: return '🛡️';
+      case UserRole.BETATESTER: return '🧪';
       case UserRole.USER: return '👤';
       default: return '❓';
     }
@@ -219,7 +222,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser, onBack }) 
 
       <div className="px-4 sm:px-6 lg:px-8 py-8">
         {/* Statistiche */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           <div className="bg-white p-4 rounded-lg shadow border">
             <div className="text-2xl font-bold text-gray-600">{users.length}</div>
             <div className="text-sm text-gray-600">Totali</div>
@@ -227,6 +230,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser, onBack }) 
           <div className="bg-white p-4 rounded-lg shadow border">
             <div className="text-2xl font-bold text-green-600">{users.filter(u => u.role === UserRole.USER).length}</div>
             <div className="text-sm text-gray-600">Utenti</div>
+          </div>
+          <div className="bg-white p-4 rounded-lg shadow border">
+            <div className="text-2xl font-bold text-purple-600">{users.filter(u => u.role === UserRole.BETATESTER).length}</div>
+            <div className="text-sm text-gray-600">Beta Tester</div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow border">
             <div className="text-2xl font-bold text-yellow-600">{users.filter(u => u.role === UserRole.MODERATOR).length}</div>
@@ -270,6 +277,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser, onBack }) 
               >
                 <option value="">Tutti i ruoli</option>
                 <option value={UserRole.USER}>👤 Utenti</option>
+                <option value={UserRole.BETATESTER}>🧪 Beta Tester</option>
                 <option value={UserRole.MODERATOR}>🛡️ Moderatori</option>
                 <option value={UserRole.ADMIN}>👑 Amministratori</option>
               </select>
@@ -370,6 +378,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUser, onBack }) 
                             >
                               <option value="">Cambia ruolo</option>
                               {user.role !== UserRole.USER && <option value={UserRole.USER}>👤 → Utente</option>}
+                              {user.role !== UserRole.BETATESTER && <option value={UserRole.BETATESTER}>🧪 → Beta Tester</option>}
                               {user.role !== UserRole.MODERATOR && <option value={UserRole.MODERATOR}>🛡️ → Moderatore</option>}
                               {user.role !== UserRole.ADMIN && <option value={UserRole.ADMIN}>👑 → Admin</option>}
                             </select>
