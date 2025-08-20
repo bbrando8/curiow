@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Gem, User, SavedList, Channel, Filter, ListWithItems, UserRole } from './types';
 import { auth, googleProvider, getIdToken } from './services/firebase';
 import { onAuthStateChanged, User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInWithPopup } from 'firebase/auth';
@@ -26,16 +26,23 @@ import { Routes, Route, useNavigate, useParams, Navigate, useLocation } from 're
 import './utils/adminUtils';
 import './utils/migratePermissions';
 import './utils/migrateChannels';
+import { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 
 const App: React.FC = () => {
   const [gems, setGems] = useState<Gem[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Stati per infinite scroll
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMoreGems, setHasMoreGems] = useState(true);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | undefined>(undefined);
+  const loadMoreTriggerRef = useRef<HTMLDivElement | null>(null);
+
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [userLists, setUserLists] = useState<ListWithItems[]>([]);
-  const [isMigrated, setIsMigrated] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
 
   const [filter, setFilter] = useState<Filter>({ type: 'all' });
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -70,26 +77,175 @@ const App: React.FC = () => {
     navigate(`/gem/${gemId}`);
   };
 
-  // Fetch initial static-like data
-  useEffect(() => {
-    const fetchInitialData = async () => {
-        setIsLoading(true);
-        const [fetchedGems, fetchedChannels] = await Promise.all([
-            firestoreService.fetchGems(),
-            firestoreService.fetchChannels(),
-        ]);
-        setGems(fetchedGems);
-        setChannels(fetchedChannels);
-        setIsLoading(false);
-    };
-    fetchInitialData();
+  // Caricamento iniziale delle gems con paginazione
+  const loadInitialGems = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const INITIAL_PAGE_SIZE = 7;
+      const result = await firestoreService.fetchGemsPaginated(undefined, INITIAL_PAGE_SIZE);
+      console.log('[GEMS] Initial fetch: requested', INITIAL_PAGE_SIZE, 'received', result.gems.length, 'lastVisible:', result.lastVisible?.id);
+      setGems(result.gems);
+      setLastVisible(result.lastVisible);
+      setHasMoreGems(result.gems.length === INITIAL_PAGE_SIZE);
+      console.log('[GEMS] State after initial fetch -> total:', result.gems.length, 'hasMore:', result.gems.length === INITIAL_PAGE_SIZE);
+    } catch (error) {
+      console.error('Error loading initial gems:', error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  // Caricamento di più gems per infinite scroll
+  const loadMoreGems = useCallback(async () => {
+    if (!hasMoreGems) { console.log('[GEMS] loadMoreGems aborted: hasMoreGems=false'); return; }
+    if (isLoadingMore) { console.log('[GEMS] loadMoreGems aborted: already loading'); return; }
+    if (!lastVisible) { console.log('[GEMS] loadMoreGems aborted: lastVisible undefined'); return; }
+
+    setIsLoadingMore(true);
+    try {
+      const PAGE_SIZE = 7;
+      console.log('[GEMS] Fetching more: pageSize', PAGE_SIZE, 'from lastVisible', lastVisible.id);
+      const result = await firestoreService.fetchGemsPaginated(lastVisible, PAGE_SIZE);
+      console.log('[GEMS] Page fetched: received', result.gems.length, 'new items, new lastVisible:', result.lastVisible?.id);
+
+      if (result.gems.length > 0) {
+        setGems(prev => {
+          const merged = [...prev, ...result.gems];
+          console.log('[GEMS] Total after merge:', merged.length);
+          return merged;
+        });
+        setLastVisible(result.lastVisible);
+        setHasMoreGems(result.gems.length === PAGE_SIZE);
+        console.log('[GEMS] hasMore after page:', result.gems.length === PAGE_SIZE);
+      } else {
+        setHasMoreGems(false);
+        console.log('[GEMS] No more gems available.');
+      }
+    } catch (error) {
+      console.error('Error loading more gems:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [hasMoreGems, isLoadingMore, lastVisible]);
+
+  // Intersection Observer per infinite scroll
+  useEffect(() => {
+    if (!firebaseUser || !hasMoreGems || isLoadingMore) return;
+    if (isLoading) return; // attendi fine caricamento iniziale
+
+    const attachObserver = () => {
+      const trigger = loadMoreTriggerRef.current;
+      if (!trigger) {
+        // Ritenta una volta al prossimo frame se il sentinel non è ancora montato
+        requestAnimationFrame(() => {
+          const retryTrigger = loadMoreTriggerRef.current;
+          if (retryTrigger) {
+            console.log('Observer retry: sentinel trovato al secondo tentativo');
+            startObserver(retryTrigger);
+          } else {
+            console.warn('Observer retry fallito: sentinel ancora assente');
+          }
+        });
+        return;
+      }
+      startObserver(trigger);
+    };
+
+    const startObserver = (trigger: HTMLDivElement) => {
+      console.log('Setting up IntersectionObserver for loadMoreTriggerRef (gems len:', gems.length, ')');
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach(entry => {
+            console.log('Observer entry:', { isIntersecting: entry.isIntersecting, ratio: entry.intersectionRatio });
+          });
+          if (entries[0].isIntersecting && hasMoreGems && !isLoadingMore) {
+            console.log('Triggering loadMoreGems');
+            loadMoreGems();
+          }
+        },
+        {
+          root: null,
+          threshold: 0.1,
+          rootMargin: '200px 0px 200px 0px'
+        }
+      );
+      observer.observe(trigger);
+      observerRef.current = observer;
+    };
+
+    // memorizza observer per cleanup
+    const observerRef = { current: null as IntersectionObserver | null };
+    attachObserver();
+
+    return () => {
+      if (observerRef.current && loadMoreTriggerRef.current) {
+        console.log('Cleaning observer on unmount/update');
+        observerRef.current.unobserve(loadMoreTriggerRef.current);
+        observerRef.current.disconnect();
+      }
+    };
+  }, [firebaseUser, hasMoreGems, isLoadingMore, loadMoreGems, gems, isLoading]);
+
+  // Fallback: listener scroll (utile per il primo batch che talvolta non attiva l'observer)
+  useEffect(() => {
+    if (!firebaseUser || !hasMoreGems) return;
+    if (isLoadingMore) return;
+    const onScroll = () => {
+      if (!loadMoreTriggerRef.current) return;
+      if (isLoadingMore) return;
+      const rect = loadMoreTriggerRef.current.getBoundingClientRect();
+      const vh = window.innerHeight;
+      if (rect.top - vh < 150 && hasMoreGems) {
+        console.log('[GEMS][FALLBACK-SCROLL] Trigger loadMoreGems (rect.top:', rect.top, 'vh:', vh, ')');
+        loadMoreGems();
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [firebaseUser, hasMoreGems, isLoadingMore, loadMoreGems, gems.length]);
+
+  // Caricamento iniziale e reset quando cambia il filtro o l'utente si logga
+  useEffect(() => {
+    if (firebaseUser) {
+      console.log('Loading gems for logged user, filter:', filter);
+      setGems([]);
+      setLastVisible(undefined);
+      setHasMoreGems(true);
+      loadInitialGems();
+    }
+  }, [firebaseUser, filter.type, filter.value]);
+
+  // Caricamento dati iniziali (solo per utenti non loggati e canali) - attende authReady
+  useEffect(() => {
+    if (!authReady) return; // aspetta inizializzazione auth
+    if (firebaseUser) return; // se loggato, non fare il fetch non-loggato
+
+    const fetchInitialData = async () => {
+      setIsLoading(true);
+      try {
+        const fetchedChannels = await firestoreService.fetchChannels();
+        setChannels(fetchedChannels);
+        console.log('Loading gems for non-logged user (post authReady)');
+        const result = await firestoreService.fetchGemsPaginated(undefined, 7);
+        setGems(result.gems);
+        setLastVisible(result.lastVisible);
+        setHasMoreGems(result.gems.length === 7);
+      } catch (error) {
+        console.error('Error fetching initial data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchInitialData();
+  }, [firebaseUser, authReady]);
 
   // Auth state listener
   useEffect(() => {
       const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
           console.log('Auth state changed - currentUser:', currentUser?.uid);
           setFirebaseUser(currentUser);
+          if (!authReady) setAuthReady(true);
           if (currentUser) {
               // Log del JWT token quando lo stato cambia
               try {
@@ -102,7 +258,6 @@ const App: React.FC = () => {
               let userProfile = await firestoreService.fetchUserProfile(currentUser.uid);
               console.log('Fetched user profile:', userProfile);
 
-              // Se il profilo non esiste, creane uno nuovo. Utile per utenti già esistenti in Auth ma non in Firestore.
               if (!userProfile) {
                   console.log(`Creating new profile for user ${currentUser.uid}`);
                   const email = currentUser.email || 'no-email@example.com';
@@ -112,31 +267,19 @@ const App: React.FC = () => {
                   console.log('Created new user profile:', userProfile);
               }
 
-              // Migrazione automatica alle nuove liste
-              console.log('Attempting migration to new list structure...');
-              const migrationSuccess = await firestoreService.migrateUserToNewListStructure(currentUser.uid);
-              setIsMigrated(migrationSuccess);
-
-              // Carica le liste con la nuova struttura
               const newUserLists = await firestoreService.fetchUserListsNew(currentUser.uid);
               setUser(userProfile);
               setUserLists(newUserLists);
               setShowLoginModal(false);
-
-              console.log('Migration completed:', migrationSuccess);
-              console.log('Loaded user lists:', newUserLists);
           } else {
-              // User is signed out
               setUser(null);
               setUserLists([]);
-              setIsMigrated(false);
               setFilter({ type: 'all' });
-              // setCurrentView('feed'); // Single-page view rimosso
           }
       });
       return () => unsubscribe();
-  }, []);
-  
+  }, [authReady]);
+
   const handleSignUpAttempt = async (email: string, pass: string, firstName: string, lastName: string) => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
       await firestoreService.createUserProfile(userCredential.user.uid, email, firstName, lastName);
@@ -467,74 +610,95 @@ const App: React.FC = () => {
 
   // Limita le gems visualizzate per utenti non loggati
   const GEMS_LIMIT_FOR_UNLOGGED_USERS = 7;
-  const displayedGems = !firebaseUser
-    ? filteredGems.slice(0, GEMS_LIMIT_FOR_UNLOGGED_USERS)
-    : filteredGems;
+  let displayedGems: Gem[];
+  if (!firebaseUser) {
+    const normalGems = filteredGems.filter(g => !g.isSpecial).slice(0, GEMS_LIMIT_FOR_UNLOGGED_USERS);
+    const specialGem = filteredGems.find(g => g.isSpecial);
+    displayedGems = specialGem ? [...normalGems, specialGem] : normalGems;
+  } else {
+    displayedGems = filteredGems;
+  }
 
   const renderFeed = () => (
     <>
-        <Header
-            isLoggedIn={!!firebaseUser}
-            user={user}
-            onLogin={() => setShowLoginModal(true)}
-            onLogout={handleLogout}
-            selectedFilter={filter}
-            onSelectFilter={setFilter}
-            onNavigate={handleNavigate}
-            channels={channels}
-            showFilters={true}
-        />
-        <main className="max-w-xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <Header
+        isLoggedIn={!!firebaseUser}
+        user={user}
+        onLogin={() => setShowLoginModal(true)}
+        onLogout={handleLogout}
+        selectedFilter={filter}
+        onSelectFilter={setFilter}
+        onNavigate={handleNavigate}
+        channels={channels}
+        showFilters={true}
+      />
+      <main className="max-w-xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {isLoading && gems.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center text-slate-500 dark:text-slate-400 pt-20">
-            <SparklesIcon className="w-16 h-16 animate-pulse text-indigo-400"/>
+            <SparklesIcon className="w-16 h-16 animate-pulse text-indigo-400" />
             <p className="mt-4 text-lg font-semibold">Stiamo preparando Curiow per te...</p>
             <p className="mt-1 text-sm">Un momento, stiamo cercando spunti interessanti.</p>
           </div>
         ) : (
           <div className="space-y-8">
-            {displayedGems.length > 0 ? (
-                <>
-                  {displayedGems.map((gem, index) => (
-                      <React.Fragment key={gem.id}>
-                        <GemCard
-                          gem={gem}
-                          isLoggedIn={!!firebaseUser}
-                          isFavorite={allFavoriteIds.includes(gem.id)}
-                          onSaveRequest={handleSaveRequest}
-                          onRemoveRequest={handleRemoveRequest}
-                          onSelect={handleSelectGem}
-                          onLoginRequest={handleLoginRequest}
-                        />
-                        {/* Trigger per la modale di onboarding dopo la 4a card per utenti non loggati */}
-                        {!firebaseUser && index === 3 && !hasSeenOnboarding && (
-                          <div ref={onboardingTriggerRef} style={{ height: '1px' }} />
-                        )}
-                      </React.Fragment>
-                  ))}
-                  {/* Mostra il blocco di invito al login se l'utente non è loggato e ci sono più gemme disponibili */}
-                  {!firebaseUser && filteredGems.length > GEMS_LIMIT_FOR_UNLOGGED_USERS && (
-                    <div className="p-8 text-center bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 rounded-2xl shadow-2xl my-8">
-                      <h2 className="text-3xl font-bold text-white mb-3">Continua a scoprire</h2>
-                      <p className="text-indigo-300 text-lg mb-6">
-                        Registrati o accedi per sbloccare tutti i contenuti e salvare le tue gemme preferite.
-                      </p>
-                      <div className="flex flex-col sm:flex-row justify-center gap-4">
-                        <button
-                          onClick={() => setShowLoginModal(true)}
-                          className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 px-8 rounded-full transition-all duration-300 shadow-lg transform hover:scale-105"
-                        >
-                          Registrati o Accedi
-                        </button>
-                      </div>
+            {displayedGems.map((gem, index) => (
+              <React.Fragment key={gem.id}>
+                {gem.isSpecial ? (
+                  <div className="p-8 text-center bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 rounded-2xl shadow-2xl my-8">
+                    <h2 className="text-3xl font-bold text-white mb-3">{gem.title}</h2>
+                    <p className="text-indigo-300 text-lg mb-6">{gem.description}</p>
+                    <div className="flex flex-col sm:flex-row justify-center gap-4">
+                      <button
+                        onClick={() => setShowLoginModal(true)}
+                        className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 px-8 rounded-full transition-all duration-300 shadow-lg transform hover:scale-105"
+                      >
+                        Registrati o Accedi
+                      </button>
                     </div>
-                  )}
-                </>
-            ) : (
-                <div className="text-center pt-20 text-slate-500 dark:text-slate-400">
-                    <h3 className="text-xl font-semibold">Nessuna gemma trovata</h3>
-                    <p className="mt-2">Prova a selezionare un'altra categoria o filtro.</p>
-                </div>
+                  </div>
+                ) : (
+                  <GemCard
+                    gem={gem}
+                    isLoggedIn={!!firebaseUser}
+                    isFavorite={allFavoriteIds.includes(gem.id)}
+                    onSaveRequest={handleSaveRequest}
+                    onRemoveRequest={handleRemoveRequest}
+                    onSelect={handleSelectGem}
+                    onLoginRequest={handleLoginRequest}
+                  />
+                )}
+
+                {!firebaseUser && index === 3 && !hasSeenOnboarding && (
+                  <div ref={onboardingTriggerRef} style={{ height: '1px' }} />
+                )}
+              </React.Fragment>
+            ))}
+
+            {firebaseUser && !isLoading && hasMoreGems && (
+              <div className="flex flex-col items-center py-12 gap-3">
+                <div ref={loadMoreTriggerRef} style={{ height: 40, width: '100%' }} />
+                {isLoadingMore ? (
+                  <div className="flex flex-col items-center text-slate-500 dark:text-slate-400">
+                    <SparklesIcon className="w-8 h-8 animate-pulse text-indigo-400" />
+                    <p className="mt-2 text-sm">Caricamento altre gemme...</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-slate-400 text-sm">Scorri per caricare altre gemme</div>
+                    <button
+                      type="button"
+                      onClick={() => { console.log('[GEMS] Fallback button clicked'); loadMoreGems(); }}
+                      className="text-indigo-500 hover:text-indigo-600 text-xs font-medium underline"
+                    >Carica altre</button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {firebaseUser && !hasMoreGems && gems.length > 0 && (
+              <div className="text-center py-8 text-slate-400 text-sm">
+                🎉 Hai visto tutte le gemme disponibili!
+              </div>
             )}
           </div>
         )}
@@ -589,31 +753,48 @@ const App: React.FC = () => {
       }
     },[id, singleGem]);
 
-    // Listener domande utente
+    // Listener domande utente - ISOLATO dal resto della logica
     useEffect(()=>{
       if(!id) return;
+
+      console.log('Setting up listener for gem:', id);
+
       const unsubscribe = firestoreService.listenToUserQuestions(id, (questions)=>{
-        setGems(prev=>{
-          let changed=false;
-            const updated = prev.map(g=>{
-              if(g.id===id){
-                if(!shallowQuestionsEqual((g as any).userQuestions, questions)){
-                  changed=true;
-                  return { ...g, userQuestions: questions } as Gem;
-                }
-              }
-              return g;
-            });
-            return changed?updated:prev;
-        });
+        console.log('Received questions update for gem:', id, questions.length);
+
+        // Aggiorna solo la gem singola, NON l'array principale
         setSingleGem(prev=>{
           if(!prev) return prev;
-          if(!shallowQuestionsEqual((prev as any).userQuestions, questions)) return { ...prev, userQuestions: questions } as Gem;
+          if(!shallowQuestionsEqual((prev as any).userQuestions, questions)) {
+            return { ...prev, userQuestions: questions } as Gem;
+          }
           return prev;
         });
+
+        // Aggiorna l'array principale SOLO se necessario e SENZA scatenare re-render
+        setGems(prev=>{
+          const updated = prev.map(g=>{
+            if(g.id===id){
+              if(!shallowQuestionsEqual((g as any).userQuestions, questions)){
+                return { ...g, userQuestions: questions } as Gem;
+              }
+            }
+            return g;
+          });
+
+          // Controllo se è davvero cambiato qualcosa
+          const hasChanges = prev.some((g, index) => g !== updated[index]);
+          if (!hasChanges) return prev; // Evita aggiornamenti inutili
+          return updated;
+        });
+
       });
-      return ()=>unsubscribe();
-    },[id]);
+
+      return () => {
+        console.log('Cleaning up listener for gem:', id);
+        unsubscribe();
+      };
+    }, [id]);
 
     if(loadingGem) return <div className="p-8 text-center text-slate-500">Caricamento gem...</div>;
     if(!singleGem) return <div className="p-8 text-center text-slate-500">Gem non trovata.</div>;

@@ -13,7 +13,10 @@ import {
   Unsubscribe,
   orderBy,
   where,
-  writeBatch
+  writeBatch,
+  startAfter,
+  QueryDocumentSnapshot,
+  DocumentData
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Gem, Channel, User, SavedList, UserQuestion, UserRole, TopicSuggestion, ListWithItems } from '../types';
@@ -273,51 +276,6 @@ export const fetchUserListsNew = async (uid: string): Promise<ListWithItems[]> =
     } catch (error) {
         console.error("Error fetching user lists:", error);
         return [];
-    }
-};
-
-export const migrateUserToNewListStructure = async (uid: string): Promise<boolean> => {
-    try {
-        console.log('Starting migration for user:', uid);
-
-        // Verifica se l'utente ha già liste nella nuova struttura
-        const existingNewLists = await listService.fetchUserLists(uid);
-        console.log('Existing new lists found:', existingNewLists.length);
-
-        if (existingNewLists.length > 0) {
-            console.log('User already migrated, skipping migration');
-            return true; // Già migrato
-        }
-
-        // Ottieni le vecchie liste
-        const oldLists = await fetchUserSavedLists(uid);
-        console.log('Old lists found:', oldLists.length, oldLists);
-
-        if (oldLists.length === 0) {
-            console.log('No old lists found, creating default favorites list');
-            // Crea una lista preferiti di default nella nuova struttura
-            await listService.createList('Preferiti', uid, 'I tuoi contenuti preferiti', false, '#3B82F6', '❤️');
-            console.log('Default favorites list created');
-            return true;
-        }
-
-        console.log('Migrating old lists to new structure...');
-        // Migra le vecchie liste
-        await listService.migrateUserLists(uid, oldLists);
-        console.log('Migration completed successfully');
-
-        // Rimuovi le vecchie liste dal documento utente solo dopo migrazione riuscita
-        await updateDoc(doc(db, 'users', uid), {
-            savedLists: [],
-            migratedToNewLists: true,
-            migratedAt: new Date()
-        });
-        console.log('Old lists cleared from user document');
-
-        return true;
-    } catch (error) {
-        console.error("Error migrating user lists:", error);
-        return false;
     }
 };
 
@@ -583,5 +541,30 @@ export const fetchGemById = async (id: string): Promise<Gem | null> => {
   } catch (error) {
     console.error('Error fetching gem by id:', error);
     return null;
+  }
+};
+
+// --- Funzioni per caricamento paginato delle gems ---
+
+export const fetchGemsPaginated = async (lastDoc?: QueryDocumentSnapshot<DocumentData>, pageSize: number = 20): Promise<{ gems: Gem[], lastVisible?: QueryDocumentSnapshot<DocumentData> }> => {
+  try {
+    const gemsCollection = collection(db, 'gems');
+    let q = query(gemsCollection, orderBy('title', 'asc'), limit(pageSize));
+
+    if (lastDoc) {
+      q = query(gemsCollection, orderBy('title', 'asc'), startAfter(lastDoc), limit(pageSize));
+    }
+
+    const gemSnapshot = await getDocs(q);
+    const gems = gemSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), userQuestions: [] } as Gem));
+
+    // Ritorna anche l'ultimo documento visibile per la paginazione
+    return {
+      gems,
+      lastVisible: gemSnapshot.docs.length > 0 ? gemSnapshot.docs[gemSnapshot.docs.length - 1] : undefined
+    };
+  } catch (error) {
+    console.error("Error fetching paginated gems:", error);
+    return { gems: [] };
   }
 };
