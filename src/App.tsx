@@ -66,14 +66,7 @@ const App: React.FC = () => {
   const location = useLocation();
 
   const handleSelectGem = async (gemId: string) => {
-    if (auth.currentUser) {
-      const token = await getIdToken();
-      console.log('Firebase JWT Token:', token);
-    } else {
-      console.log('Utente non autenticato, nessun JWT token da mostrare.');
-    }
     setSelectedGemId(gemId);
-    // navigazione alla pagina dettaglio
     navigate(`/gem/${gemId}`);
   };
 
@@ -83,11 +76,9 @@ const App: React.FC = () => {
     try {
       const INITIAL_PAGE_SIZE = 7;
       const result = await firestoreService.fetchGemsPaginated(undefined, INITIAL_PAGE_SIZE);
-      console.log('[GEMS] Initial fetch: requested', INITIAL_PAGE_SIZE, 'received', result.gems.length, 'lastVisible:', result.lastVisible?.id);
       setGems(result.gems);
       setLastVisible(result.lastVisible);
       setHasMoreGems(result.gems.length === INITIAL_PAGE_SIZE);
-      console.log('[GEMS] State after initial fetch -> total:', result.gems.length, 'hasMore:', result.gems.length === INITIAL_PAGE_SIZE);
     } catch (error) {
       console.error('Error loading initial gems:', error);
     } finally {
@@ -97,29 +88,20 @@ const App: React.FC = () => {
 
   // Caricamento di più gems per infinite scroll
   const loadMoreGems = useCallback(async () => {
-    if (!hasMoreGems) { console.log('[GEMS] loadMoreGems aborted: hasMoreGems=false'); return; }
-    if (isLoadingMore) { console.log('[GEMS] loadMoreGems aborted: already loading'); return; }
-    if (!lastVisible) { console.log('[GEMS] loadMoreGems aborted: lastVisible undefined'); return; }
+    if (!hasMoreGems) return;
+    if (isLoadingMore) return;
+    if (!lastVisible) return;
 
     setIsLoadingMore(true);
     try {
       const PAGE_SIZE = 7;
-      console.log('[GEMS] Fetching more: pageSize', PAGE_SIZE, 'from lastVisible', lastVisible.id);
       const result = await firestoreService.fetchGemsPaginated(lastVisible, PAGE_SIZE);
-      console.log('[GEMS] Page fetched: received', result.gems.length, 'new items, new lastVisible:', result.lastVisible?.id);
-
       if (result.gems.length > 0) {
-        setGems(prev => {
-          const merged = [...prev, ...result.gems];
-          console.log('[GEMS] Total after merge:', merged.length);
-          return merged;
-        });
+        setGems(prev => [...prev, ...result.gems]);
         setLastVisible(result.lastVisible);
         setHasMoreGems(result.gems.length === PAGE_SIZE);
-        console.log('[GEMS] hasMore after page:', result.gems.length === PAGE_SIZE);
       } else {
         setHasMoreGems(false);
-        console.log('[GEMS] No more gems available.');
       }
     } catch (error) {
       console.error('Error loading more gems:', error);
@@ -139,12 +121,7 @@ const App: React.FC = () => {
         // Ritenta una volta al prossimo frame se il sentinel non è ancora montato
         requestAnimationFrame(() => {
           const retryTrigger = loadMoreTriggerRef.current;
-          if (retryTrigger) {
-            console.log('Observer retry: sentinel trovato al secondo tentativo');
-            startObserver(retryTrigger);
-          } else {
-            console.warn('Observer retry fallito: sentinel ancora assente');
-          }
+          if (retryTrigger) startObserver(retryTrigger);
         });
         return;
       }
@@ -152,34 +129,23 @@ const App: React.FC = () => {
     };
 
     const startObserver = (trigger: HTMLDivElement) => {
-      console.log('Setting up IntersectionObserver for loadMoreTriggerRef (gems len:', gems.length, ')');
       const observer = new IntersectionObserver(
         (entries) => {
-          entries.forEach(entry => {
-            console.log('Observer entry:', { isIntersecting: entry.isIntersecting, ratio: entry.intersectionRatio });
-          });
           if (entries[0].isIntersecting && hasMoreGems && !isLoadingMore) {
-            console.log('Triggering loadMoreGems');
             loadMoreGems();
           }
         },
-        {
-          root: null,
-          threshold: 0.1,
-          rootMargin: '200px 0px 200px 0px'
-        }
+        { root: null, threshold: 0.1, rootMargin: '200px 0px 200px 0px' }
       );
       observer.observe(trigger);
       observerRef.current = observer;
     };
 
-    // memorizza observer per cleanup
     const observerRef = { current: null as IntersectionObserver | null };
     attachObserver();
 
     return () => {
       if (observerRef.current && loadMoreTriggerRef.current) {
-        console.log('Cleaning observer on unmount/update');
         observerRef.current.unobserve(loadMoreTriggerRef.current);
         observerRef.current.disconnect();
       }
@@ -196,7 +162,6 @@ const App: React.FC = () => {
       const rect = loadMoreTriggerRef.current.getBoundingClientRect();
       const vh = window.innerHeight;
       if (rect.top - vh < 150 && hasMoreGems) {
-        console.log('[GEMS][FALLBACK-SCROLL] Trigger loadMoreGems (rect.top:', rect.top, 'vh:', vh, ')');
         loadMoreGems();
       }
     };
@@ -207,7 +172,6 @@ const App: React.FC = () => {
   // Caricamento iniziale e reset quando cambia il filtro o l'utente si logga
   useEffect(() => {
     if (firebaseUser) {
-      console.log('Loading gems for logged user, filter:', filter);
       setGems([]);
       setLastVisible(undefined);
       setHasMoreGems(true);
@@ -225,7 +189,6 @@ const App: React.FC = () => {
       try {
         const fetchedChannels = await firestoreService.fetchChannels();
         setChannels(fetchedChannels);
-        console.log('Loading gems for non-logged user (post authReady)');
         const result = await firestoreService.fetchGemsPaginated(undefined, 7);
         setGems(result.gems);
         setLastVisible(result.lastVisible);
@@ -236,37 +199,27 @@ const App: React.FC = () => {
         setIsLoading(false);
       }
     };
-
     fetchInitialData();
   }, [firebaseUser, authReady]);
 
   // Auth state listener
   useEffect(() => {
       const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-          console.log('Auth state changed - currentUser:', currentUser?.uid);
           setFirebaseUser(currentUser);
           if (!authReady) setAuthReady(true);
           if (currentUser) {
-              // Log del JWT token quando lo stato cambia
               try {
-                  const idToken = await currentUser.getIdToken();
-                  console.log('JWT Token (Auth State Changed):', idToken);
+                  await currentUser.getIdToken();
               } catch (error) {
                   console.error('Errore nel recupero del JWT token:', error);
               }
-
               let userProfile = await firestoreService.fetchUserProfile(currentUser.uid);
-              console.log('Fetched user profile:', userProfile);
-
               if (!userProfile) {
-                  console.log(`Creating new profile for user ${currentUser.uid}`);
                   const email = currentUser.email || 'no-email@example.com';
                   const [firstName, lastName] = email.split('@')[0].split('.') || [email, ''];
                   await firestoreService.createUserProfile(currentUser.uid, email, firstName, lastName || '');
                   userProfile = await firestoreService.fetchUserProfile(currentUser.uid);
-                  console.log('Created new user profile:', userProfile);
               }
-
               const newUserLists = await firestoreService.fetchUserListsNew(currentUser.uid);
               setUser(userProfile);
               setUserLists(newUserLists);
@@ -687,7 +640,7 @@ const App: React.FC = () => {
                     <div className="text-slate-400 text-sm">Scorri per caricare altre gemme</div>
                     <button
                       type="button"
-                      onClick={() => { console.log('[GEMS] Fallback button clicked'); loadMoreGems(); }}
+                      onClick={() => loadMoreGems()}
                       className="text-indigo-500 hover:text-indigo-600 text-xs font-medium underline"
                     >Carica altre</button>
                   </>
