@@ -1,31 +1,35 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { TOPICS } from '../constants';
-import { Topic, Channel, Filter, User } from '../types';
-import { SparklesIcon, UserCircleIcon, BookmarkSquareIcon, Cog6ToothIcon, TagIcon, ChevronDownIcon } from './icons';
+import { User, Filter, Channel } from '../types';
+import { SparklesIcon, UserCircleIcon, BookmarkSquareIcon, Cog6ToothIcon, ChevronDownIcon, TagIcon } from './icons';
 import { useUserPermissions } from '../services/roleService';
+import { TOPICS } from '../constants';
 
 interface HeaderProps {
   isLoggedIn: boolean;
   user?: User | null;
   onLogin: () => void;
   onLogout: () => void;
-  selectedFilter: Filter;
-  onSelectFilter: (filter: Filter) => void;
-  onNavigate: (view: 'feed' | 'saved' | 'profile' | 'dashboard' | 'topics') => void;
-  channels: Channel[];
+  onNavigate?: (view: 'feed' | 'saved' | 'profile' | 'dashboard' | 'topics') => void;
+  showFilters?: boolean;
+  selectedFilter?: Filter;
+  onSelectFilter?: (filter: Filter) => void;
+  channels?: Channel[];
 }
 
-const Header: React.FC<HeaderProps> = ({ isLoggedIn, user, onLogin, onLogout, selectedFilter, onSelectFilter, onNavigate, channels }) => {
+const Header: React.FC<HeaderProps> = ({
+  isLoggedIn,
+  user,
+  onLogin,
+  onLogout,
+  onNavigate,
+  showFilters = false,
+  selectedFilter,
+  onSelectFilter,
+  channels
+}) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
   const permissions = useUserPermissions(user);
-
-  // Debug log per controllare i permessi
-  useEffect(() => {
-    console.log('Header - User:', user);
-    console.log('Header - Permissions:', permissions);
-  }, [user, permissions]);
 
   // Chiudi il menu quando si clicca fuori
   useEffect(() => {
@@ -41,125 +45,167 @@ const Header: React.FC<HeaderProps> = ({ isLoggedIn, user, onLogin, onLogout, se
     };
   }, []);
 
-  const handleMenuItemClick = (view: 'profile' | 'dashboard' | 'topics') => {
+  const handleMenuItemClick = (view: 'profile' | 'dashboard' | 'saved' | 'feed') => {
     setShowProfileMenu(false);
-    onNavigate(view);
+    if (onNavigate) {
+      onNavigate(view);
+    }
   };
 
   const getButtonClass = (filter: Filter) => {
     const baseClass = 'px-3 py-1.5 text-sm font-semibold rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-900 focus:ring-indigo-500 whitespace-nowrap';
 
-    if (selectedFilter.type === filter.type && ('value' in selectedFilter && 'value' in filter ? selectedFilter.value === filter.value : true)) {
-      return `${baseClass} bg-indigo-600 text-white shadow-md`;
+    const isActive = selectedFilter && (
+      (filter.type === 'all' && selectedFilter.type === 'all') ||
+      (filter.type === 'favorites' && selectedFilter.type === 'favorites') ||
+      (filter.type === 'channel' && selectedFilter.type === 'channel' && filter.value === selectedFilter.value) ||
+      (filter.type === 'topic' && selectedFilter.type === 'topic' && filter.value === selectedFilter.value)
+    );
+
+    if (isActive) {
+      return `${baseClass} bg-indigo-600 text-white shadow-sm`;
     }
-    return `${baseClass} bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700`;
+    return `${baseClass} bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600`;
   };
 
   return (
-    <header className="sticky top-0 z-30 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-200 dark:border-slate-700/50">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <button onClick={() => { onSelectFilter({ type: 'all' }); onNavigate('feed'); }} className="flex items-center space-x-2">
-            <SparklesIcon className="w-7 h-7 text-indigo-500" />
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">Curiow</h1>
-          </button>
-          <div className="flex items-center space-x-2 sm:space-x-4">
-             {isLoggedIn && (
-                 <>
-                    <button
-                        onClick={() => {
-                            console.log('Saved button clicked');
-                            onNavigate('saved');
-                        }}
-                        title="Liste Salvate"
-                        className="p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                    >
-                        <BookmarkSquareIcon className="w-6 h-6" />
-                    </button>
-                    <button
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            onNavigate('profile');
-                        }}
-                        title="Profilo e Impostazioni"
-                        className="p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                    >
-                        <Cog6ToothIcon className="w-6 h-6" />
-                    </button>
-                 </>
-             )}
-             {isLoggedIn ? (
+    <>
+      <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-200 dark:border-slate-700/50">
+        <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo */}
+            <div className="flex items-center">
+              <button
+                onClick={() => onNavigate && onNavigate('feed')}
+                className="flex items-center space-x-2 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+              >
+                <SparklesIcon className="w-8 h-8" />
+                <span className="text-xl font-bold">Curiow</span>
+              </button>
+            </div>
+
+            {/* User Actions */}
+            <div className="flex items-center space-x-3">
+              {isLoggedIn ? (
                 <div className="relative" ref={menuRef}>
                   <button
                     onClick={() => setShowProfileMenu(!showProfileMenu)}
-                    className="flex items-center space-x-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    className="flex items-center space-x-2 p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    aria-label="Menu profilo"
                   >
-                    <UserCircleIcon className="w-6 h-6" />
-                    <span className="hidden sm:inline">Profilo</span>
+                    <UserCircleIcon className="w-8 h-8" />
                     <ChevronDownIcon className={`w-4 h-4 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} />
                   </button>
+
                   {showProfileMenu && (
-                    <div className="absolute right-0 z-20 mt-2 w-48 bg-white dark:bg-slate-800 rounded-md shadow-lg overflow-hidden">
+                    <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-30">
+                      <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700">
+                        <p className="text-sm font-medium text-slate-900 dark:text-white truncate max-w-full">
+                          {user?.name || user?.email || 'Utente'}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate dark:text-slate-400 truncate max-w-full">{user?.email}</p>
+                      </div>
+
+                      <button
+                        onClick={() => handleMenuItemClick('saved')}
+                        className="flex items-center w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                      >
+                        <BookmarkSquareIcon className="w-4 h-4 mr-3" />
+                        Salvati
+                      </button>
+
                       <button
                         onClick={() => handleMenuItemClick('profile')}
-                        className="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                        className="flex items-center w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                       >
+                        <UserCircleIcon className="w-4 h-4 mr-3" />
                         Profilo
                       </button>
-                      {permissions.canViewDashboard && (
+
+                      {permissions.canManageContent && (
                         <button
                           onClick={() => handleMenuItemClick('dashboard')}
-                          className="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                          className="flex items-center w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                         >
-                          Dashboard
+                          <Cog6ToothIcon className="w-4 h-4 mr-3" />
+                          Admin
                         </button>
                       )}
-                      <div className="border-t border-slate-200 dark:border-slate-700"></div>
-                      <button
-                        onClick={onLogout}
-                        className="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900"
-                      >
-                        Logout
-                      </button>
+
+                      <div className="border-t border-slate-200 dark:border-slate-700 mt-1 pt-1">
+                        <button
+                          onClick={onLogout}
+                          className="flex items-center w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                        >
+                          Logout
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
-             ) : (
+              ) : (
                 <button
-                    onClick={onLogin}
-                    className="flex items-center space-x-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  onClick={onLogin}
+                  className="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
                 >
-                    <UserCircleIcon className="w-6 h-6" />
-                    <span className="hidden sm:inline">Login</span>
+                  Accedi
                 </button>
-             )}
+              )}
+            </div>
           </div>
         </div>
-        <div className="pb-4 overflow-x-auto">
-            <nav className="flex items-center space-x-2 sm:space-x-3">
-                <button onClick={() => onSelectFilter({ type: 'all' })} className={getButtonClass({ type: 'all' })}>Tutti</button>
-                {isLoggedIn && <button onClick={() => onSelectFilter({ type: 'favorites' })} className={getButtonClass({ type: 'favorites' })}>Preferiti</button>}
-                {selectedFilter.type === 'tag' && (
-                  <>
-                    <div className="border-l border-slate-300 dark:border-slate-600 h-6 mx-2"></div>
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Tag</span>
-                    <button onClick={() => {}} className={getButtonClass(selectedFilter)}>
-                      <TagIcon className="w-3 h-3 inline-block mr-1.5"/>{selectedFilter.value}
-                    </button>
-                  </>
-                )}
-                <div className="border-l border-slate-300 dark:border-slate-600 h-6 mx-2"></div>
-                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Canali</span>
-                {channels.map(channel => (
-                    <button key={channel.id} onClick={() => onSelectFilter({type: 'channel', value: channel.id})} className={getButtonClass({type: 'channel', value: channel.id})}>
-                        {channel.emoji} {channel.name}
-                    </button>
-                ))}
-            </nav>
+      </header>
+
+      {/* Filtri - mostrati solo se showFilters è true */}
+      {showFilters && onSelectFilter && (
+        <div className="sticky top-16 z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700/50">
+          <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <div className="flex flex-wrap gap-2">
+              {/* Filtro Tutti */}
+              <button
+                onClick={() => onSelectFilter({ type: 'all' })}
+                className={getButtonClass({ type: 'all' })}
+              >
+                Tutti
+              </button>
+
+              {/* Filtro Preferiti (solo se l'utente è loggato) */}
+              {isLoggedIn && (
+                <button
+                  onClick={() => onSelectFilter({ type: 'favorites' })}
+                  className={getButtonClass({ type: 'favorites' })}
+                >
+                  ♥ Preferiti
+                </button>
+              )}
+
+              {/* Filtri per Canali */}
+              {channels && channels.map(channel => (
+                <button
+                  key={channel.id}
+                  onClick={() => onSelectFilter({ type: 'channel', value: channel.id })}
+                  className={getButtonClass({ type: 'channel', value: channel.id })}
+                >
+                  {channel.name}
+                </button>
+              ))}
+
+              {/* Filtri per Topic */}
+              {TOPICS.map(topic => (
+                <button
+                  key={topic.id}
+                  onClick={() => onSelectFilter({ type: 'topic', value: topic.name })}
+                  className={getButtonClass({ type: 'topic', value: topic.name })}
+                >
+                  <TagIcon className="w-3 h-3 mr-1" />
+                  {topic.name}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
-    </header>
+      )}
+    </>
   );
 };
 

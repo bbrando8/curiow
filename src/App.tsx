@@ -482,6 +482,7 @@ const App: React.FC = () => {
             onSelectFilter={setFilter}
             onNavigate={handleNavigate}
             channels={channels}
+            showFilters={true}
         />
         <main className="max-w-xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {isLoading && gems.length === 0 ? (
@@ -620,11 +621,19 @@ const App: React.FC = () => {
     return <GemDetailView
       gem={singleGem}
       isFavorite={allFavoriteIds.includes(singleGem.id)}
+      isLoggedIn={!!firebaseUser}
+      user={user}
       onBack={handleBackToFeed}
       onSaveRequest={handleSaveRequest}
       onRemoveRequest={handleRemoveRequest}
       onAddUserQuestion={handleAddUserQuestion}
       onTagSelect={handleSelectTag}
+      onLogin={() => setShowLoginModal(true)}
+      onLogout={handleLogout}
+      onNavigate={handleNavigate}
+      selectedFilter={filter}
+      onSelectFilter={setFilter}
+      channels={channels}
     />;
   };
 

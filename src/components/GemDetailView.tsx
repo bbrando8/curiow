@@ -1,15 +1,24 @@
 import React, { useState } from 'react';
-import { Gem, UserQuestion } from '../types';
+import { Gem, UserQuestion, User, Filter, Channel } from '../types';
 import { ChevronLeftIcon, HeartIcon, ShareIcon, PaperAirplaneIcon, SparklesIcon, PlusCircleIcon, TagIcon, LinkIcon, ChevronDownIcon } from './icons';
+import Header from './Header';
 
 interface GemDetailViewProps {
   gem: Gem;
   isFavorite: boolean;
+  isLoggedIn: boolean;
+  user?: User | null;
   onBack: () => void;
   onSaveRequest: (gemId: string) => void;
   onRemoveRequest: (gemId: string) => void;
   onAddUserQuestion: (gemId: string, question: string) => void;
   onTagSelect: (tag: string) => void;
+  onLogin: () => void;
+  onLogout: () => void;
+  onNavigate: (view: 'feed' | 'saved' | 'profile' | 'dashboard' | 'topics') => void;
+  selectedFilter?: Filter;
+  onSelectFilter?: (filter: Filter) => void;
+  channels?: Channel[];
 }
 
 const UserQuestionItem: React.FC<{ userQuestion: UserQuestion }> = ({ userQuestion }) => (
@@ -28,7 +37,7 @@ const UserQuestionItem: React.FC<{ userQuestion: UserQuestion }> = ({ userQuesti
     </div>
 );
 
-const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, onSaveRequest, onRemoveRequest, onAddUserQuestion, onTagSelect }) => {
+const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, onSaveRequest, onRemoveRequest, onAddUserQuestion, onTagSelect, isLoggedIn, user, onLogin, onLogout, onNavigate, selectedFilter, onSelectFilter, channels }) => {
   const [userQuestion, setUserQuestion] = useState('');
   const [isSourcesOpen, setIsSourcesOpen] = useState(false);
 
@@ -241,6 +250,17 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
 
   return (
     <div className="max-w-2xl mx-auto">
+        <Header
+          isLoggedIn={isLoggedIn}
+          user={user}
+          onLogin={onLogin}
+          onLogout={onLogout}
+          onNavigate={onNavigate}
+          showFilters={true}
+          selectedFilter={selectedFilter}
+          onSelectFilter={onSelectFilter}
+          channels={channels}
+        />
         <header className="sticky top-0 z-10 flex items-center p-2 sm:p-4 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-200 dark:border-slate-700/50">
             <button
                 onClick={onBack}
