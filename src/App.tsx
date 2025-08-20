@@ -97,7 +97,11 @@ const App: React.FC = () => {
       const PAGE_SIZE = 7;
       const result = await firestoreService.fetchGemsPaginated(lastVisible, PAGE_SIZE);
       if (result.gems.length > 0) {
-        setGems(prev => [...prev, ...result.gems]);
+        setGems(prev => {
+          const existingIds = new Set(prev.map(g => g.id));
+          const newUnique = result.gems.filter(g => !existingIds.has(g.id));
+          return newUnique.length ? [...prev, ...newUnique] : prev;
+        });
         setLastVisible(result.lastVisible);
         setHasMoreGems(result.gems.length === PAGE_SIZE);
       } else {

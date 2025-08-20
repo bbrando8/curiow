@@ -549,16 +549,16 @@ export const fetchGemById = async (id: string): Promise<Gem | null> => {
 export const fetchGemsPaginated = async (lastDoc?: QueryDocumentSnapshot<DocumentData>, pageSize: number = 20): Promise<{ gems: Gem[], lastVisible?: QueryDocumentSnapshot<DocumentData> }> => {
   try {
     const gemsCollection = collection(db, 'gems');
-    let q = query(gemsCollection, orderBy('title', 'asc'), limit(pageSize));
+    // Ordinamento stabile: prima per title poi per id documento
+    let q = query(gemsCollection, orderBy('title', 'asc'), orderBy('__name__', 'asc'), limit(pageSize));
 
     if (lastDoc) {
-      q = query(gemsCollection, orderBy('title', 'asc'), startAfter(lastDoc), limit(pageSize));
+      q = query(gemsCollection, orderBy('title', 'asc'), orderBy('__name__', 'asc'), startAfter(lastDoc), limit(pageSize));
     }
 
     const gemSnapshot = await getDocs(q);
     const gems = gemSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), userQuestions: [] } as Gem));
 
-    // Ritorna anche l'ultimo documento visibile per la paginazione
     return {
       gems,
       lastVisible: gemSnapshot.docs.length > 0 ? gemSnapshot.docs[gemSnapshot.docs.length - 1] : undefined
