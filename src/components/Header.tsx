@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Filter, Channel } from '../types';
-import { SparklesIcon, UserCircleIcon, BookmarkSquareIcon, Cog6ToothIcon, ChevronDownIcon, TagIcon } from './icons';
+import { SparklesIcon, UserCircleIcon, BookmarkSquareIcon, Cog6ToothIcon, ChevronDownIcon } from './icons';
 import { useUserPermissions } from '../services/roleService';
-import { TOPICS } from '../constants';
 
 interface HeaderProps {
   isLoggedIn: boolean;
@@ -28,8 +27,36 @@ const Header: React.FC<HeaderProps> = ({
   channels
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [isFiltersVisible, setIsFiltersVisible] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const permissions = useUserPermissions(user);
+
+  // Hook per gestire lo scroll e nascondere/mostrare i filtri
+  useEffect(() => {
+    if (!showFilters) return;
+
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+
+      // Se stiamo scrollando verso il basso e abbiamo scrollato più di 100px, nascondi i filtri
+      if (currentScrollY > lastScrollY && currentScrollY > 100) {
+        setIsFiltersVisible(false);
+      }
+      // Se stiamo scrollando verso l'alto, mostra i filtri
+      else if (currentScrollY < lastScrollY) {
+        setIsFiltersVisible(true);
+      }
+
+      setLastScrollY(currentScrollY);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [lastScrollY, showFilters]);
 
   // Chiudi il menu quando si clicca fuori
   useEffect(() => {
@@ -156,10 +183,16 @@ const Header: React.FC<HeaderProps> = ({
         </div>
       </header>
 
-      {/* Filtri - mostrati solo se showFilters è true */}
+      {/* Filtri - mostrati solo se showFilters è true con animazione */}
       {showFilters && onSelectFilter && (
-        <div className="sticky top-16 z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700/50">
-          <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+        <div
+          className={`sticky top-16 z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700/50 overflow-hidden transition-all duration-300 ease-in-out ${
+            isFiltersVisible
+              ? 'max-h-24 opacity-100 transform translate-y-0'
+              : 'max-h-0 opacity-0 transform -translate-y-2'
+          }`}
+        >
+          <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 py-3 pb-6">
             <div className="flex flex-wrap gap-2">
               {/* Filtro Tutti */}
               <button
@@ -187,18 +220,6 @@ const Header: React.FC<HeaderProps> = ({
                   className={getButtonClass({ type: 'channel', value: channel.id })}
                 >
                   {channel.name}
-                </button>
-              ))}
-
-              {/* Filtri per Topic */}
-              {TOPICS.map(topic => (
-                <button
-                  key={topic.id}
-                  onClick={() => onSelectFilter({ type: 'topic', value: topic.name })}
-                  className={getButtonClass({ type: 'topic', value: topic.name })}
-                >
-                  <TagIcon className="w-3 h-3 mr-1" />
-                  {topic.name}
                 </button>
               ))}
             </div>
