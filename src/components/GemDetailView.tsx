@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Gem, UserQuestion, User, Filter, Channel } from '../types';
 import { ChevronLeftIcon, HeartIcon, ShareIcon, PaperAirplaneIcon, SparklesIcon, PlusCircleIcon, TagIcon, LinkIcon, ChevronDownIcon } from './icons';
 import Header from './Header';
@@ -40,6 +40,36 @@ const UserQuestionItem: React.FC<{ userQuestion: UserQuestion }> = ({ userQuesti
 const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, onSaveRequest, onRemoveRequest, onAddUserQuestion, onTagSelect, isLoggedIn, user, onLogin, onLogout, onNavigate, selectedFilter, onSelectFilter, channels }) => {
   const [userQuestion, setUserQuestion] = useState('');
   const [isSourcesOpen, setIsSourcesOpen] = useState(false);
+  const [hasAutoScrolled, setHasAutoScrolled] = useState(false);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  // Funzione per scrollare il titolo allineandolo appena sotto l'header sticky
+  const scrollTitleIntoView = (smooth = false) => {
+    const titleEl = document.getElementById('gem-title');
+    if (!titleEl) return;
+    const headerEl = document.querySelector('header');
+    const headerHeight = headerEl ? (headerEl as HTMLElement).offsetHeight : 0;
+    const buffer = 8; // piccolo margine
+    const target = titleEl.getBoundingClientRect().top + window.scrollY - headerHeight - buffer;
+    window.scrollTo({ top: target >= 0 ? target : 0, behavior: smooth ? 'smooth' : 'auto' });
+    setHasAutoScrolled(true);
+  };
+
+  // Scroll iniziale dopo mount/cambio gem (post layout)
+  useEffect(() => {
+    setHasAutoScrolled(false);
+    // Usa rAF per attendere layout, poi ulteriore timeout breve per carichi asincroni minimi
+    requestAnimationFrame(() => {
+      scrollTitleIntoView(false);
+      setTimeout(() => { if (!hasAutoScrolled) scrollTitleIntoView(false); }, 60);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gem.id]);
+
+  // Se l'immagine carica dopo e non abbiamo ancora auto-scrollato, riallinea
+  const handleImageLoad = () => {
+    if (!hasAutoScrolled) scrollTitleIntoView(false);
+  };
 
   const handleUserQuestionSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -270,13 +300,13 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
           initialFiltersOpen={false}
           onBack={onBack}
         />
-        {/* Rimossa barra di navigazione locale */}
         <article>
-            <img src={gem.imageUrl} alt={gem.title} className="w-full h-auto object-cover md:rounded-b-lg" />
-
             <div className="p-5 sm:p-8">
-                <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white leading-tight">{gem.title}</h1>
-                
+                {/* Immagine prima */}
+                <img ref={imgRef} src={gem.imageUrl} alt={gem.title} onLoad={handleImageLoad} className="w-full h-auto object-cover md:rounded-lg" />
+                {/* Titolo sotto immagine (ancora) */}
+                <h1 id="gem-title" className="mt-4 text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white leading-tight">{gem.title}</h1>
+
                 <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 items-center">
                     <button
                         onClick={() => isFavorite ? onRemoveRequest(gem.id) : onSaveRequest(gem.id)}
@@ -293,7 +323,6 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                         <span className="text-sm font-medium">Condividi</span>
                     </button>
                 </div>
-                
                 {gem.tags && gem.tags.length > 0 && (
                     <div className="mt-4 flex flex-wrap gap-2 items-center">
                         <TagIcon className="w-5 h-5 text-slate-400 dark:text-slate-500"/>
@@ -314,7 +343,7 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                   <p className="mt-6 text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{gem.description}</p>
                 ); })()}
 
-                {/* Fonti: usa search_results con fallback a sources */}
+                {/* Fonti */}
                 {(() => { const sources = (gem as any).search_results && (gem as any).search_results.length > 0 ? (gem as any).search_results : gem.sources; return sources && sources.length > 0 && (
                     <section className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6">
                          <button
