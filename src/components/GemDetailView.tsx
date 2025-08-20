@@ -316,6 +316,40 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   // Testo completo del saggio (nuovo: può essere in gem.content.description)
   const fullDescription: string | undefined = (gem as any)?.content?.description;
 
+  // Utility: segmentazione in paragrafi leggibili (solo visualizzazione)
+  const buildParagraphs = (text?: string): string[] => {
+    if (!text) return [];
+    const normalized = text.replace(/\r\n?/g, '\n').trim();
+    // Se l'autore ha già usato paragrafi (doppie newline) rispetta quelli
+    const explicit = normalized.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+    if (explicit.length > 1) return explicit;
+    // Altrimenti suddividi per punto + spazio + Maiuscola (mantieni il punto)
+    const periodSplit = normalized
+      // comprime whitespace multiplo a singolo spazio per consistenza
+      .replace(/\n+/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .split(/(?<=\.)\s+(?=[A-ZÀ-ÖØ-Ý])/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    if (periodSplit.length > 1) return periodSplit;
+    // fallback: ritorna intero blocco
+    return [normalized];
+  };
+
+  const paragraphs = buildParagraphs(fullDescription);
+
+  // Calcolo tempo di lettura (200 wpm medio)
+  const readingTime = (() => {
+    if (!fullDescription) return null;
+    const words = fullDescription.trim().split(/\s+/).filter(Boolean).length;
+    const WPM = 200; // media adulti IT
+    const minutesFloat = words / WPM;
+    const minutes = Math.floor(minutesFloat);
+    const seconds = Math.round((minutesFloat - minutes) * 60);
+    const display = minutes < 1 ? `${seconds < 10 ? '~15s' : `${seconds}s`}` : `${minutes} min${minutes === 1 ? '' : ''}${seconds >= 30 && minutes < 10 ? ' +' : ''}`;
+    return { words, minutes, seconds, display };
+  })();
+
   return (
     <div className="max-w-2xl mx-auto">
         <Header
@@ -409,7 +443,30 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                     className={`absolute inset-0 transition-opacity duration-400 ease-in-out ${activeTab==='saggio' ? 'opacity-100' : 'opacity-0 pointer-events-none'} overflow-visible`}
                   >
                     {fullDescription ? (
-                      <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{fullDescription}</p>
+                      paragraphs.length > 0 ? (
+                        <div className="prose prose-slate dark:prose-invert max-w-none">
+                          {readingTime && (
+                            <div className="mb-6 flex items-center text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 gap-3">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-semibold">⏱ {readingTime.display}</span>
+                              <span className="text-slate-400 dark:text-slate-500">{readingTime.words} parole</span>
+                            </div>
+                          )}
+                          {paragraphs.map((p, i) => {
+                            const isKey = p.includes(':') || /—/.test(p);
+                            return (
+                              <p
+                                key={i}
+                                className={`text-base md:text-lg leading-relaxed md:leading-loose tracking-[0.015em] text-slate-700 dark:text-slate-300 text-justify hyphens-auto break-words mb-5 last:mb-0 ${i===0 ? 'first-letter:text-4xl first-letter:font-semibold first-letter:float-left first-letter:mr-2 first-letter:mt-1 first-letter:leading-[0.9]' : ''} ${isKey ? 'border-l-2 border-indigo-300 dark:border-indigo-500 pl-3 bg-indigo-50/40 dark:bg-indigo-500/5 rounded-sm' : ''}`}
+                                style={{ hyphens: 'auto' }}
+                              >
+                                {p}
+                              </p>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{fullDescription}</p>
+                      )
                     ) : (
                       <p className="italic text-slate-500 dark:text-slate-400">Nessun testo disponibile.</p>
                     )}
