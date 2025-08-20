@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Gem, UserQuestion, User, Filter, Channel } from '../types';
-import { ChevronLeftIcon, HeartIcon, ShareIcon, PaperAirplaneIcon, SparklesIcon, PlusCircleIcon, TagIcon, LinkIcon, ChevronDownIcon } from './icons';
+import { ChevronLeftIcon, HeartIcon, ShareIcon, PaperAirplaneIcon, SparklesIcon, PlusCircleIcon, TagIcon, LinkIcon, ChevronDownIcon, LightBulbIcon, BookOpenIcon } from './icons';
 import Header from './Header';
 
 interface GemDetailViewProps {
@@ -44,6 +44,32 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   const imgRef = useRef<HTMLImageElement | null>(null);
   // nuovo stato per tab
   const [activeTab, setActiveTab] = useState<'tips' | 'saggio'>('tips');
+  // refs per animazione cross-fade
+  const tipsRef = useRef<HTMLDivElement | null>(null);
+  const saggioRef = useRef<HTMLDivElement | null>(null);
+  const [contentHeight, setContentHeight] = useState<number>(0);
+
+  // funzione misura altezza contenuto attivo
+  const measureActiveHeight = () => {
+    const el = activeTab === 'tips' ? tipsRef.current : saggioRef.current;
+    if (el) {
+      // usa scrollHeight per includere overflow
+      const h = el.scrollHeight;
+      setContentHeight(h);
+    }
+  };
+
+  useEffect(() => {
+    // misura dopo cambio tab / gem
+    requestAnimationFrame(() => measureActiveHeight());
+  }, [activeTab, gem.id]);
+
+  useEffect(() => {
+    // misura al resize per mantenere altezza coerente
+    const onResize = () => measureActiveHeight();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Funzione per scrollare il titolo allineandolo appena sotto l'header sticky
   const scrollTitleIntoView = (smooth = false) => {
@@ -344,38 +370,50 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                 )}
 
                 {/* Tabs Tips / Saggio */}
-                <div className="mt-8 border-b border-slate-200 dark:border-slate-700 flex space-x-6">
-                  <button
-                    onClick={() => setActiveTab('tips')}
-                    className={`pb-3 -mb-px text-sm font-semibold tracking-wide uppercase relative transition-colors ${activeTab==='tips' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
-                  >
-                    Tips
-                    {activeTab==='tips' && <span className="absolute left-0 right-0 -bottom-[1px] h-0.5 bg-gradient-to-r from-indigo-500 to-violet-500 rounded" />}
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('saggio')}
-                    className={`pb-3 -mb-px text-sm font-semibold tracking-wide uppercase relative transition-colors ${activeTab==='saggio' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
-                  >
-                    Saggio
-                    {activeTab==='saggio' && <span className="absolute left-0 right-0 -bottom-[1px] h-0.5 bg-gradient-to-r from-indigo-500 to-violet-500 rounded" />}
-                  </button>
+                <div className="mt-8 flex justify-end">
+                  <div className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 p-1 shadow-inner ring-1 ring-slate-200/60 dark:ring-slate-700/60">
+                    <button
+                      onClick={() => setActiveTab('tips')}
+                      aria-pressed={activeTab==='tips'}
+                      title="Vista Tips (strutturata)"
+                      className={`relative flex items-center justify-center w-9 h-9 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:focus:ring-indigo-500 group ${activeTab==='tips' ? 'bg-gradient-to-tr from-indigo-500 to-violet-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300'}`}
+                    >
+                      <LightBulbIcon className="w-5 h-5" />
+                      {activeTab==='tips' && <span className="absolute -bottom-1 h-1 w-4 rounded-full bg-white/70 dark:bg-white/40"/>}
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('saggio')}
+                      aria-pressed={activeTab==='saggio'}
+                      title="Vista Saggio (testo completo)"
+                      className={`relative flex items-center justify-center w-9 h-9 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:focus:ring-indigo-500 group ${activeTab==='saggio' ? 'bg-gradient-to-tr from-indigo-500 to-violet-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300'}`}
+                    >
+                      <BookOpenIcon className="w-5 h-5" />
+                      {activeTab==='saggio' && <span className="absolute -bottom-1 h-1 w-4 rounded-full bg-white/70 dark:bg-white/40"/>}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="mt-6">
-                  {activeTab === 'tips' && (
-                    (() => { const structuredContent = renderStructuredContent(); return structuredContent ? structuredContent : (
+                <div className="mt-6 relative" style={{ height: contentHeight ? contentHeight : undefined }}>
+                  {/* Pannello Tips */}
+                  <div
+                    ref={tipsRef}
+                    className={`absolute inset-0 transition-opacity duration-400 ease-in-out ${activeTab==='tips' ? 'opacity-100' : 'opacity-0 pointer-events-none'} overflow-visible`}
+                  >
+                    {(() => { const structuredContent = renderStructuredContent(); return structuredContent ? structuredContent : (
                       <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{fullDescription || ''}</p>
-                    ); })()
-                  )}
-                  {activeTab === 'saggio' && (
-                    <div>
-                      {fullDescription ? (
-                        <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{fullDescription}</p>
-                      ) : (
-                        <p className="italic text-slate-500 dark:text-slate-400">Nessun testo disponibile.</p>
-                      )}
-                    </div>
-                  )}
+                    ); })()}
+                  </div>
+                  {/* Pannello Saggio */}
+                  <div
+                    ref={saggioRef}
+                    className={`absolute inset-0 transition-opacity duration-400 ease-in-out ${activeTab==='saggio' ? 'opacity-100' : 'opacity-0 pointer-events-none'} overflow-visible`}
+                  >
+                    {fullDescription ? (
+                      <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{fullDescription}</p>
+                    ) : (
+                      <p className="italic text-slate-500 dark:text-slate-400">Nessun testo disponibile.</p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Fonti */}

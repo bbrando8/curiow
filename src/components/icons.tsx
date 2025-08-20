@@ -90,3 +90,16 @@ export const XMarkIcon: React.FC<{ className?: string }> = ({ className }) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
     </svg>
 );
+
+export const LightBulbIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 2.25c-3.728 0-6.75 2.94-6.75 6.563 0 2.278 1.148 4.043 2.505 5.332.516.486.84 1.13.84 1.828v.432c0 .414.336.75.75.75h5.31c.414 0 .75-.336.75-.75v-.432c0-.698.324-1.342.84-1.828 1.357-1.29 2.505-3.054 2.505-5.332C18.75 5.19 15.728 2.25 12 2.25Z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 18.75h4.5M10.5 21h3" />
+  </svg>
+);
+
+export const BookOpenIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75c-1.148-.766-2.51-1.5-4.125-1.5S4.898 5.984 3.75 6.75v10.5c1.148-.766 2.51-1.5 4.125-1.5S10.852 16.484 12 17.25m0-10.5c1.148-.766 2.51-1.5 4.125-1.5s2.977.734 4.125 1.5v10.5c-1.148-.766-2.51-1.5-4.125-1.5S13.148 16.484 12 17.25m0-10.5v10.5" />
+  </svg>
+);
