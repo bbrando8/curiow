@@ -617,7 +617,7 @@ const App: React.FC = () => {
                 {gem.isSpecial ? (
                   <div className="p-8 text-center bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 rounded-2xl shadow-2xl my-8">
                     <h2 className="text-3xl font-bold text-white mb-3">{gem.title}</h2>
-                    <p className="text-indigo-300 text-lg mb-6">{gem.description}</p>
+                    <p className="text-indigo-300 text-lg mb-6">{(gem as any).content?.description || ''}</p>
                     <div className="flex flex-col sm:flex-row justify-center gap-4">
                       <button
                         onClick={() => setShowLoginModal(true)}

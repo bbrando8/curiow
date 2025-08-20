@@ -19,7 +19,7 @@ interface GemsManagementProps {
 
 interface GemFormData {
   title: string;
-  description: string;
+  description: string; // sarà salvata in content.description
   channelId: string;
   imageUrl: string;
   tags: string[];
@@ -121,8 +121,15 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
 
   const handleCreateGem = async () => {
     try {
-      const newGemData: Omit<Gem, 'id'> = {
-        ...formData,
+      const newGemData: any = {
+        title: formData.title,
+        topic: (gems[0]?.topic) || 'Cultura Generale & Curiosità', // fallback se UI non gestisce topic
+        channelId: formData.channelId,
+        imageUrl: formData.imageUrl,
+        tags: formData.tags,
+        suggestedQuestions: formData.suggestedQuestions,
+        sources: formData.sources,
+        content: { template: 'article', description: formData.description },
         userQuestions: []
       };
       await createGem(newGemData);
@@ -138,14 +145,14 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
     if (!editingGem) return;
 
     try {
-      const updateData: Partial<Gem> = {
+      const updateData: any = {
         title: formData.title,
-        description: formData.description,
         channelId: formData.channelId,
         imageUrl: formData.imageUrl,
         tags: formData.tags,
         suggestedQuestions: formData.suggestedQuestions,
-        sources: formData.sources
+        sources: formData.sources,
+        content: { ...(editingGem as any).content, template: (editingGem as any).content?.template || 'article', description: formData.description }
       };
       await updateGem(editingGem.id, updateData);
       setEditingGem(null);
@@ -180,12 +187,12 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
   const openEditModal = (gem: Gem & { id: string }) => {
     setFormData({
       title: gem.title || '',
-      description: gem.description || '',
+      description: (gem as any).content?.description || '',
       channelId: (gem as any).channelId || '',
       imageUrl: gem.imageUrl || '',
       tags: gem.tags || [],
       suggestedQuestions: gem.suggestedQuestions || [],
-      sources: (gem.search_results && gem.search_results.length > 0 ? gem.search_results : gem.sources) || []
+      sources: (gem as any).search_results && (gem as any).search_results.length > 0 ? (gem as any).search_results : gem.sources || []
     });
     setEditingGem(gem);
   };
@@ -610,7 +617,7 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                                 {gem.content?.template ? (
                                   <div className="p-3 border border-gray-200 rounded bg-white">{renderStructuredContentSummary(gem.content)}</div>
                                 ) : (
-                                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{gem.description}</p>
+                                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{(gem as any).content?.description || ''}</p>
                                 )}
                               </div>
                               {(gem.suggestedQuestions?.length || 0) > 0 && (
@@ -791,7 +798,7 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Descrizione *
+                      Descrizione * (Saggio / Testo lungo)
                     </label>
                     <textarea
                       value={formData.description}

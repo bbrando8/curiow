@@ -42,6 +42,8 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   const [isSourcesOpen, setIsSourcesOpen] = useState(false);
   const [hasAutoScrolled, setHasAutoScrolled] = useState(false);
   const imgRef = useRef<HTMLImageElement | null>(null);
+  // nuovo stato per tab
+  const [activeTab, setActiveTab] = useState<'tips' | 'saggio'>('tips');
 
   // Funzione per scrollare il titolo allineandolo appena sotto l'header sticky
   const scrollTitleIntoView = (smooth = false) => {
@@ -285,6 +287,9 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   };
   // --- fine rendering contenuti template ---
 
+  // Testo completo del saggio (nuovo: può essere in gem.content.description)
+  const fullDescription: string | undefined = (gem as any)?.content?.description;
+
   return (
     <div className="max-w-2xl mx-auto">
         <Header
@@ -338,14 +343,44 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                     </div>
                 )}
 
-                {/* Contenuto descrizione o template */}
-                {(() => { const structuredContent = renderStructuredContent(); return structuredContent ? structuredContent : (
-                  <p className="mt-6 text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{gem.description}</p>
-                ); })()}
+                {/* Tabs Tips / Saggio */}
+                <div className="mt-8 border-b border-slate-200 dark:border-slate-700 flex space-x-6">
+                  <button
+                    onClick={() => setActiveTab('tips')}
+                    className={`pb-3 -mb-px text-sm font-semibold tracking-wide uppercase relative transition-colors ${activeTab==='tips' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                  >
+                    Tips
+                    {activeTab==='tips' && <span className="absolute left-0 right-0 -bottom-[1px] h-0.5 bg-gradient-to-r from-indigo-500 to-violet-500 rounded" />}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('saggio')}
+                    className={`pb-3 -mb-px text-sm font-semibold tracking-wide uppercase relative transition-colors ${activeTab==='saggio' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                  >
+                    Saggio
+                    {activeTab==='saggio' && <span className="absolute left-0 right-0 -bottom-[1px] h-0.5 bg-gradient-to-r from-indigo-500 to-violet-500 rounded" />}
+                  </button>
+                </div>
+
+                <div className="mt-6">
+                  {activeTab === 'tips' && (
+                    (() => { const structuredContent = renderStructuredContent(); return structuredContent ? structuredContent : (
+                      <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{fullDescription || ''}</p>
+                    ); })()
+                  )}
+                  {activeTab === 'saggio' && (
+                    <div>
+                      {fullDescription ? (
+                        <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{fullDescription}</p>
+                      ) : (
+                        <p className="italic text-slate-500 dark:text-slate-400">Nessun testo disponibile.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {/* Fonti */}
                 {(() => { const sources = (gem as any).search_results && (gem as any).search_results.length > 0 ? (gem as any).search_results : gem.sources; return sources && sources.length > 0 && (
-                    <section className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6">
+                    <section className="mt-10 border-t border-slate-200 dark:border-slate-700 pt-6">
                          <button
                             onClick={() => setIsSourcesOpen(!isSourcesOpen)}
                             className="w-full flex justify-between items-center text-left"

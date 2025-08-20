@@ -41,7 +41,6 @@ export const fetchGems = async (maxCount: number = 20): Promise<Gem[]> => {
         const gemsCollection = collection(db, 'gems');
         const q = query(gemsCollection, limit(maxCount));
         const gemSnapshot = await getDocs(q);
-        // Ritorniamo gemme con userQuestions vuoto, verrà popolato dal listener se necessario
         return gemSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), userQuestions: [] } as Gem));
     } catch (error) {
         console.error("Error fetching gems:", error);
@@ -434,11 +433,15 @@ export const searchGems = async (searchTerm: string): Promise<(Gem & { id: strin
     const snapshot = await getDocs(gemsCollection);
     const allGems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Gem & { id: string }));
 
-    return allGems.filter(gem =>
-      gem.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      gem.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      gem.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    return allGems.filter(gem => {
+      const desc = (gem as any).content?.description || (gem as any).description || '';
+      const tags = gem.tags || [];
+      return (
+        gem.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        desc.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+    });
   } catch (error) {
     console.error("Error searching gems:", error);
     return [];

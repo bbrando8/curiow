@@ -97,14 +97,15 @@ export interface Gem {
   id:string;
   topic: Topic;
   title: string;
-  description: string;
+  /** @deprecated Spostato in content.description */
+  description?: string;
   imageUrl: string;
   userQuestions: UserQuestion[];
   tags: string[];
   suggestedQuestions: string[];
   sources: Source[]; // legacy / backdoor
   search_results?: Source[]; // nuovo campo principale per le fonti
-  content?: GemContent; // nuovo campo opzionale per template strutturati
+  content?: GemContent; // nuovo campo opzionale per template strutturati (incluso description a livello content)
   channelId?: string; // opzionale: riferimento al canale
 }
 
