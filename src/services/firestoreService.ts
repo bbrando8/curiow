@@ -573,3 +573,15 @@ export const getGemById = async (gemId: string): Promise<(Gem & { id: string }) 
     return null;
   }
 };
+
+export const fetchGemById = async (id: string): Promise<Gem | null> => {
+  try {
+    const gemDocRef = doc(db, 'gems', id);
+    const gemDoc = await getDoc(gemDocRef);
+    if (!gemDoc.exists()) return null;
+    return { id: gemDoc.id, ...gemDoc.data(), userQuestions: [] } as Gem;
+  } catch (error) {
+    console.error('Error fetching gem by id:', error);
+    return null;
+  }
+};

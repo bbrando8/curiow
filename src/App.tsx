@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Gem, User, SavedList, Channel, Filter, Topic, ListWithItems, UserRole } from './types';
+import { Gem, User, SavedList, Channel, Filter, ListWithItems, UserRole } from './types';
 import { auth, googleProvider, getIdToken } from './services/firebase';
 import { onAuthStateChanged, User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInWithPopup } from 'firebase/auth';
 import * as firestoreService from './services/firestoreService';
@@ -10,20 +10,22 @@ import GemDetailView from './components/GemDetailView';
 import LoginModal from './components/LoginModal';
 import SavedView from './components/SavedView';
 import ProfileView from './components/ProfileView';
-import AdminDashboard from './components/admin/AdminDashboard';
 import TopicManagement from './components/admin/TopicManagement';
+import GemsManagement from './components/admin/GemsManagement';
+import UserManagement from './components/admin/UserManagement';
+import ChannelManagement from './components/admin/ChannelManagement';
+import FeedbackManagement from './components/admin/FeedbackManagement';
 import FeedbackButton from './components/FeedbackButton';
 import FeedbackModal from './components/FeedbackModal';
 import OnboardingModal from './components/OnboardingModal';
 import { SparklesIcon } from './components/icons';
 import SaveToListModal from './components/SaveToListModal';
 import AdminConfirmationModal from './components/admin/AdminConfirmationModal';
+import { Routes, Route, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom';
 // Import admin utils in development
 import './utils/adminUtils';
 import './utils/migratePermissions';
 import './utils/migrateChannels';
-
-type View = 'feed' | 'detail' | 'saved' | 'profile' | 'dashboard' | 'topics';
 
 const App: React.FC = () => {
   const [gems, setGems] = useState<Gem[]>([]);
@@ -37,12 +39,8 @@ const App: React.FC = () => {
 
   const [filter, setFilter] = useState<Filter>({ type: 'all' });
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [currentView, setCurrentView] = useState<View>('feed');
   const [selectedGemId, setSelectedGemId] = useState<string | null>(null);
-
-  // Nuovo stato per la modale del dettaglio
-  const [showGemDetailModal, setShowGemDetailModal] = useState(false);
-
+  // Stati modali salvataggio / rimozione
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [gemToSaveId, setGemToSaveId] = useState<string | null>(null);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
@@ -57,6 +55,9 @@ const App: React.FC = () => {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const feedbackButtonRef = React.useRef<any>(null);
 
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const handleSelectGem = async (gemId: string) => {
     if (auth.currentUser) {
       const token = await getIdToken();
@@ -65,7 +66,8 @@ const App: React.FC = () => {
       console.log('Utente non autenticato, nessun JWT token da mostrare.');
     }
     setSelectedGemId(gemId);
-    setShowGemDetailModal(true);
+    // navigazione alla pagina dettaglio
+    navigate(`/gem/${gemId}`);
   };
 
   // Fetch initial static-like data
@@ -129,25 +131,12 @@ const App: React.FC = () => {
               setUserLists([]);
               setIsMigrated(false);
               setFilter({ type: 'all' });
-              setCurrentView('feed');
+              // setCurrentView('feed'); // Single-page view rimosso
           }
       });
       return () => unsubscribe();
   }, []);
   
-  // Listener for user questions on selected gem
-  useEffect(() => {
-    if (!selectedGemId) return;
-
-    const unsubscribe = firestoreService.listenToUserQuestions(selectedGemId, (questions) => {
-        setGems(prevGems => prevGems.map(gem => 
-            gem.id === selectedGemId ? { ...gem, userQuestions: questions } : gem
-        ));
-    });
-
-    return () => unsubscribe();
-  }, [selectedGemId]);
-
   const handleSignUpAttempt = async (email: string, pass: string, firstName: string, lastName: string) => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
       await firestoreService.createUserProfile(userCredential.user.uid, email, firstName, lastName);
@@ -173,7 +162,7 @@ const App: React.FC = () => {
       let userProfile = await firestoreService.fetchUserProfile(user.uid);
 
       if (!userProfile) {
-        // Se �� la prima volta che l'utente accede con Google, crea il profilo
+        // Se è la prima volta che l'utente accede con Google, crea il profilo
         const email = user.email || 'no-email@example.com';
         const firstName = user.displayName?.split(' ')[0] || 'Nome';
         const lastName = user.displayName?.split(' ').slice(1).join(' ') || 'Cognome';
@@ -192,10 +181,18 @@ const App: React.FC = () => {
     signOut(auth);
   };
 
-  const handleNavigate = (view: View) => {
+  const handleNavigate = (view: 'feed' | 'saved' | 'profile' | 'dashboard' | 'topics') => {
     console.log('Navigating to:', view); // Debug log
     window.scrollTo(0, 0);
-    setCurrentView(view);
+    // mappa view a route
+    switch(view){
+      case 'feed': navigate('/'); break;
+      case 'saved': navigate('/saved'); break;
+      case 'profile': navigate('/profile'); break;
+      case 'dashboard': navigate('/admin/gems'); break;
+      case 'topics': navigate('/admin/topics'); break;
+      default: navigate('/');
+    }
   };
   
   const handleLoginRequest = () => {
@@ -351,39 +348,41 @@ const App: React.FC = () => {
       await firestoreService.addUserQuestion(gemId, question);
   };
 
+  // Funzioni mancanti reintrodotte
   const handleSelectTag = (tag: string) => {
-      setFilter({ type: 'tag', value: tag });
-      setShowGemDetailModal(false);
+    setFilter({ type: 'tag', value: tag });
+    // opzionale: torna al feed filtrato se non ci si trova già
+    if (!location.pathname.startsWith('/gem/')) return;
   };
-  
-  const handleUpdateUser = async (updatedUser: User) => {
-      if (!firebaseUser) return;
-      setUser(updatedUser);
-      await firestoreService.updateUserProfile(firebaseUser.uid, {
-          firstName: updatedUser.firstName,
-          lastName: updatedUser.lastName,
-      });
-      alert("Profilo aggiornato!");
-  }
 
-  // Funzioni per il sistema di feedback
+  const handleBackToFeed = () => {
+    if (window.history.length > 1) navigate(-1); else navigate('/');
+  };
+
+  const handleUpdateUser = async (updatedUser: User) => {
+    if (!firebaseUser) return;
+    setUser(updatedUser);
+    await firestoreService.updateUserProfile(firebaseUser.uid, {
+      firstName: updatedUser.firstName,
+      lastName: updatedUser.lastName,
+    });
+  };
+
+  const handleOnboardingLogin = () => { setShowOnboardingModal(false); setShowLoginModal(true); };
+  const handleOnboardingSignUp = () => { setShowOnboardingModal(false); setShowLoginModal(true); };
+
   const getCurrentSection = (): string => {
-    switch (currentView) {
-      case 'feed':
-        return 'Feed principale';
-      case 'detail':
-        return `Dettaglio gem: ${selectedGem?.title || 'Sconosciuto'}`;
-      case 'saved':
-        return 'Liste salvate';
-      case 'profile':
-        return 'Profilo utente';
-      case 'dashboard':
-        return 'Dashboard amministratore';
-      case 'topics':
-        return 'Gestione argomenti';
-      default:
-        return 'Sezione sconosciuta';
+    const path = location.pathname;
+    if (path === '/') return 'Feed principale';
+    if (path.startsWith('/gem/')) {
+      const id = path.split('/gem/')[1];
+      const gem = gems.find(g=>g.id===id);
+      return `Dettaglio gem: ${gem?.title || id}`;
     }
+    if (path === '/saved') return 'Liste salvate';
+    if (path === '/profile') return 'Profilo utente';
+    if (path.startsWith('/admin')) return 'Sezione amministrazione';
+    return 'Sezione sconosciuta';
   };
 
   const handleFeedbackSubmit = async (section: string, message: string) => {
@@ -472,8 +471,6 @@ const App: React.FC = () => {
     ? filteredGems.slice(0, GEMS_LIMIT_FOR_UNLOGGED_USERS)
     : filteredGems;
 
-  const selectedGem = gems.find(gem => gem.id === selectedGemId);
-
   const renderFeed = () => (
     <>
         <Header
@@ -544,59 +541,139 @@ const App: React.FC = () => {
     </>
   );
 
-  const renderContent = () => {
-    switch (currentView) {
-        case 'saved':
-            return firebaseUser ? <SavedView
-                        allGems={gems}
-                        allFavoriteIds={allFavoriteIds}
-                        savedLists={userLists}
-                        onUpdateLists={updateUserLists}
-                        onSelectGem={handleSelectGem}
-                        onToggleFavorite={handleToggleFavorite}
-                        onLoginRequest={handleLoginRequest}
-                        onBack={() => handleNavigate('feed')}
-                        onCreateList={handleCreateNewList}
-                    /> : renderFeed();
-        case 'profile':
-            return firebaseUser && user ? <ProfileView user={user} onUpdateUser={handleUpdateUser} onBack={() => handleNavigate('feed')} onNavigate={handleNavigate} /> : renderFeed();
-        case 'dashboard':
-            return firebaseUser && user ? (
-                <AdminDashboard
-                    currentUser={{ ...user, id: firebaseUser.uid }}
-                    onClose={() => handleNavigate('feed')}
-                />
-            ) : renderFeed();
-        case 'topics':
-            return firebaseUser && user ? (
-                <TopicManagement
-                    currentUser={{ ...user, uid: firebaseUser.uid }}
-                    onBack={() => handleNavigate('feed')}
-                />
-            ) : renderFeed();
-        case 'feed':
-        default:
-            return renderFeed();
-    }
-  }
+  const FeedPage = () => renderFeed();
 
-  const handleOnboardingLogin = () => {
-    setShowOnboardingModal(false);
-    setShowLoginModal(true);
+  const SavedPage: React.FC = () => {
+    if(!firebaseUser) return <Navigate to="/" replace />;
+    return <SavedView
+      allGems={gems}
+      allFavoriteIds={allFavoriteIds}
+      savedLists={userLists}
+      onUpdateLists={updateUserLists}
+      onSelectGem={handleSelectGem}
+      onToggleFavorite={handleToggleFavorite}
+      onLoginRequest={handleLoginRequest}
+      onBack={() => navigate(-1)}
+      onCreateList={handleCreateNewList}
+    />;
   };
 
-  const handleOnboardingSignUp = () => {
-    setShowOnboardingModal(false);
-    setShowLoginModal(true);
+  const ProfilePage: React.FC = () => {
+    if(!firebaseUser || !user) return <Navigate to="/" replace />;
+    return <ProfileView user={user} onUpdateUser={handleUpdateUser} onBack={() => navigate(-1)} onNavigate={() => navigate('/admin/gems')} />;
   };
 
-  const handleBackToFeed = () => {
-    setShowGemDetailModal(false);
+  const GemDetailPage: React.FC = () => {
+    const { id } = useParams();
+    const gem = gems.find(g=>g.id===id);
+    const [singleGem, setSingleGem] = React.useState<Gem | null>(gem || null);
+    const [loadingGem, setLoadingGem] = React.useState(!gem);
+
+    // Aggiorna selectedGemId solo se cambia
+    useEffect(()=>{ if(id && id !== selectedGemId) setSelectedGemId(id); },[id, selectedGemId]);
+
+    const shallowQuestionsEqual = (a:any[]|undefined,b:any[]|undefined) => {
+      if(a===b) return true; if(!a||!b) return false; if(a.length!==b.length) return false; return a.every((q,i)=>q.id===b[i].id && q.answer===b[i].answer && q.question===b[i].question && q.isGenerating===b[i].isGenerating);
+    };
+
+    // Carica gem se non presente
+    useEffect(()=>{
+      if(!singleGem && id){
+        (async()=>{
+          setLoadingGem(true);
+          const fetched = await firestoreService.fetchGemById(id);
+            if(fetched) setSingleGem(fetched);
+          setLoadingGem(false);
+        })();
+      }
+    },[id, singleGem]);
+
+    // Listener domande utente
+    useEffect(()=>{
+      if(!id) return;
+      const unsubscribe = firestoreService.listenToUserQuestions(id, (questions)=>{
+        setGems(prev=>{
+          let changed=false;
+            const updated = prev.map(g=>{
+              if(g.id===id){
+                if(!shallowQuestionsEqual((g as any).userQuestions, questions)){
+                  changed=true;
+                  return { ...g, userQuestions: questions } as Gem;
+                }
+              }
+              return g;
+            });
+            return changed?updated:prev;
+        });
+        setSingleGem(prev=>{
+          if(!prev) return prev;
+          if(!shallowQuestionsEqual((prev as any).userQuestions, questions)) return { ...prev, userQuestions: questions } as Gem;
+          return prev;
+        });
+      });
+      return ()=>unsubscribe();
+    },[id]);
+
+    if(loadingGem) return <div className="p-8 text-center text-slate-500">Caricamento gem...</div>;
+    if(!singleGem) return <div className="p-8 text-center text-slate-500">Gem non trovata.</div>;
+
+    return <GemDetailView
+      gem={singleGem}
+      isFavorite={allFavoriteIds.includes(singleGem.id)}
+      onBack={handleBackToFeed}
+      onSaveRequest={handleSaveRequest}
+      onRemoveRequest={handleRemoveRequest}
+      onAddUserQuestion={handleAddUserQuestion}
+      onTagSelect={handleSelectTag}
+    />;
   };
+
+  const RequireAdmin: React.FC<{children: React.ReactElement}> = ({children}) => {
+    if(!firebaseUser || !user || user.role !== UserRole.ADMIN) return <Navigate to="/" replace />;
+    return children;
+  };
+
+  const AdminGemsPage = () => (
+    <RequireAdmin>
+      <GemsManagement currentUser={{ ...user!, uid: firebaseUser!.uid }} onBack={() => navigate(-1)} />
+    </RequireAdmin>
+  );
+  const AdminUsersPage = () => (
+    <RequireAdmin>
+      <UserManagement currentUser={user as any} onBack={() => navigate(-1)} />
+    </RequireAdmin>
+  );
+  const AdminTopicsPage = () => (
+    <RequireAdmin>
+      <TopicManagement currentUser={{ ...user!, uid: firebaseUser!.uid }} onBack={() => navigate(-1)} />
+    </RequireAdmin>
+  );
+  const AdminChannelsPage = () => (
+    <RequireAdmin>
+      <ChannelManagement currentUser={{ ...user!, id: firebaseUser!.uid }} onBack={() => navigate(-1)} />
+    </RequireAdmin>
+  );
+  const AdminFeedbackPage = () => (
+    <RequireAdmin>
+      <FeedbackManagement onBack={() => navigate(-1)} />
+    </RequireAdmin>
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-        {renderContent()}
+        <Routes>
+          <Route path="/" element={<FeedPage />} />
+          <Route path="/saved" element={<SavedPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/gem/:id" element={<GemDetailPage />} />
+          <Route path="/admin" element={<Navigate to="/admin/gems" replace />} />
+          <Route path="/admin/gems" element={<AdminGemsPage />} />
+          <Route path="/admin/users" element={<AdminUsersPage />} />
+          <Route path="/admin/topics" element={<AdminTopicsPage />} />
+          <Route path="/admin/channels" element={<AdminChannelsPage />} />
+          <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
 
         {/* Pulsante feedback flottante per admin e betatester */}
         {canShowFeedbackButton && (
@@ -648,20 +725,6 @@ const App: React.FC = () => {
             />
         )}
 
-        {/* Modale dettaglio gem a schermo intero */}
-        {showGemDetailModal && selectedGem && (
-            <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 overflow-y-auto">
-                <GemDetailView
-                    gem={selectedGem}
-                    isFavorite={allFavoriteIds.includes(selectedGem.id)}
-                    onBack={handleBackToFeed}
-                    onSaveRequest={handleSaveRequest}
-                    onRemoveRequest={handleRemoveRequest}
-                    onAddUserQuestion={handleAddUserQuestion}
-                    onTagSelect={handleSelectTag}
-                />
-            </div>
-        )}
 
         {showRemoveConfirm && gemToRemoveId && (
           <AdminConfirmationModal
