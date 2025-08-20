@@ -54,6 +54,13 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
     alert("Contenuto copiato negli appunti!");
   };
 
+  const handleFilterSelect = (filter: Filter) => {
+    if (onSelectFilter) onSelectFilter(filter);
+    if (filter.type === 'channel') {
+      onNavigate('feed');
+    }
+  };
+
   // --- Rendering contenuti template ---
   const renderMiniThread = (content: any) => {
     const steps = Array.isArray(content.steps) ? content.steps : [];
@@ -258,20 +265,12 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
           onNavigate={onNavigate}
           showFilters={true}
           selectedFilter={selectedFilter}
-          onSelectFilter={onSelectFilter}
+          onSelectFilter={handleFilterSelect}
           channels={channels}
+          initialFiltersOpen={false}
+          onBack={onBack}
         />
-        <header className="sticky top-0 z-10 flex items-center p-2 sm:p-4 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-200 dark:border-slate-700/50">
-            <button
-                onClick={onBack}
-                className="p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                aria-label="Torna indietro"
-            >
-                <ChevronLeftIcon className="w-6 h-6" />
-            </button>
-            <span className="ml-4 font-semibold text-slate-800 dark:text-slate-200">{gem.topic}</span>
-        </header>
-        
+        {/* Rimossa barra di navigazione locale */}
         <article>
             <img src={gem.imageUrl} alt={gem.title} className="w-full h-auto object-cover md:rounded-b-lg" />
 
