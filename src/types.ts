@@ -45,6 +45,7 @@ export interface MiniThreadContent {
   steps: MiniThreadContentStep[];
   payoff: string;
   claims_to_verify?: string[];
+  summary?: string; // aggiunto
 }
 export interface MythVsRealityContent {
   template: 'myth_vs_reality';
@@ -53,6 +54,7 @@ export interface MythVsRealityContent {
   evidence: string;
   why_it_matters: string;
   claims_to_verify?: string[];
+  summary?: string; // aggiunto
 }
 export interface FactCardContent {
   template: 'fact_card';
@@ -61,6 +63,7 @@ export interface FactCardContent {
   implication: string;
   action: string;
   claims_to_verify?: string[];
+  summary?: string; // aggiunto
 }
 export interface ProsConsContent {
   template: 'pros_cons';
@@ -69,6 +72,7 @@ export interface ProsConsContent {
   cons: string[];
   advice: string;
   claims_to_verify?: string[];
+  summary?: string; // aggiunto
 }
 export interface QuickExplainerContent {
   template: 'quick_explainer';
@@ -78,6 +82,7 @@ export interface QuickExplainerContent {
   anti_example: string;
   takeaway: string;
   claims_to_verify?: string[];
+  summary?: string; // aggiunto
 }
 export type GemContent =
   MiniThreadContent |
@@ -85,7 +90,7 @@ export type GemContent =
   FactCardContent |
   ProsConsContent |
   QuickExplainerContent |
-  { template: string; [key: string]: any };
+  { template: string; summary?: string; [key: string]: any };
 // ---- fine nuovi tipi ----
 
 export interface Gem {

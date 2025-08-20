@@ -1,6 +1,6 @@
 import React from 'react';
 import { Gem } from '../types';
-import { HeartIcon, ShareIcon, TagIcon } from './icons';
+import { HeartIcon, ShareIcon, TagIcon, ChevronDownIcon, SparklesIcon } from './icons';
 
 interface GemCardProps {
   gem: Gem;
@@ -46,6 +46,21 @@ const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRe
     }
   };
 
+  const [showSummary, setShowSummary] = React.useState(false); // controllo manuale (click)
+  const [isHovering, setIsHovering] = React.useState(false); // stato hover
+  const [canHover, setCanHover] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
+      const update = () => setCanHover(mq.matches);
+      update();
+      mq.addEventListener('change', update);
+      return () => mq.removeEventListener('change', update);
+    }
+  }, []);
+  const actualOpen = showSummary || (canHover && isHovering);
+  const summary = (gem.content as any)?.summary as string | undefined;
+
   React.useEffect(() => {
     if (onView) {
       onView();
@@ -61,8 +76,32 @@ const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRe
         aria-label={`Vedi dettagli per: ${gem.title}`}
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleCardClick()}
     >
-      <img src={gem.imageUrl} alt={gem.title} className="w-full h-auto object-cover aspect-[3/4]" />
-
+      <div className="relative">
+        <img src={gem.imageUrl} alt={gem.title} className="w-full h-auto object-cover aspect-[3/4]" />
+        {summary && (
+          <div className="absolute inset-x-0 bottom-0" onMouseEnter={() => setIsHovering(true)} onMouseLeave={() => setIsHovering(false)}>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setShowSummary(s => !s); }}
+              className={`w-full text-left group/summary focus:outline-none`}
+              aria-expanded={actualOpen}
+              aria-controls={`summary-${gem.id}`}
+              aria-label={actualOpen ? 'Chiudi sintesi' : 'Apri sintesi'}
+            >
+              <div className={`relative overflow-hidden transition-all duration-300 ease-out bg-gradient-to-t from-slate-900/90 via-slate-900/70 to-slate-900/20 backdrop-blur-sm text-white ${actualOpen ? 'max-h-60 sm:max-h-72' : 'max-h-16'}`}>
+                <div className="p-3 pr-10">
+                  <p id={`summary-${gem.id}`} className={`text-xs leading-snug whitespace-pre-line ${actualOpen ? '' : 'line-clamp-2'}`}>{summary}</p>
+                </div>
+                <div className="absolute right-2 top-2 flex items-center gap-1 text-[10px] uppercase font-semibold opacity-80">
+                  <SparklesIcon className="w-4 h-4" />
+                  <ChevronDownIcon className={`w-4 h-4 transition-transform ${actualOpen ? 'rotate-180' : ''}`} />
+                </div>
+                <div className="absolute inset-0 ring-1 ring-white/10 rounded-t" />
+              </div>
+            </button>
+          </div>
+        )}
+      </div>
       <div className="p-5">
         <div className="flex justify-between items-start">
             <div>
