@@ -633,26 +633,56 @@ const App: React.FC = () => {
     return children;
   };
 
-  const AdminGemsPage = () => (
-    <RequireAdmin>
-      <GemsManagement currentUser={{ ...user!, uid: firebaseUser!.uid }} onBack={() => navigate(-1)} />
-    </RequireAdmin>
-  );
-  const AdminUsersPage = () => (
-    <RequireAdmin>
-      <UserManagement currentUser={user as any} onBack={() => navigate(-1)} />
-    </RequireAdmin>
-  );
-  const AdminTopicsPage = () => (
-    <RequireAdmin>
-      <TopicManagement currentUser={{ ...user!, uid: firebaseUser!.uid }} onBack={() => navigate(-1)} />
-    </RequireAdmin>
-  );
-  const AdminChannelsPage = () => (
-    <RequireAdmin>
-      <ChannelManagement currentUser={{ ...user!, id: firebaseUser!.uid }} onBack={() => navigate(-1)} />
-    </RequireAdmin>
-  );
+  // Helper per creare currentUser sicuro
+  const createSafeCurrentUser = () => {
+    if (!user || !firebaseUser) return null;
+    return { ...user, uid: firebaseUser.uid };
+  };
+
+  const AdminGemsPage = () => {
+    const safeCurrentUser = createSafeCurrentUser();
+    if (!safeCurrentUser) return <Navigate to="/" replace />;
+
+    return (
+      <RequireAdmin>
+        <GemsManagement currentUser={safeCurrentUser} onBack={() => navigate(-1)} />
+      </RequireAdmin>
+    );
+  };
+
+  const AdminUsersPage = () => {
+    const safeCurrentUser = createSafeCurrentUser();
+    if (!safeCurrentUser) return <Navigate to="/" replace />;
+
+    return (
+      <RequireAdmin>
+        <UserManagement currentUser={safeCurrentUser} onBack={() => navigate(-1)} />
+      </RequireAdmin>
+    );
+  };
+
+  const AdminTopicsPage = () => {
+    const safeCurrentUser = createSafeCurrentUser();
+    if (!safeCurrentUser) return <Navigate to="/" replace />;
+
+    return (
+      <RequireAdmin>
+        <TopicManagement currentUser={safeCurrentUser} onBack={() => navigate(-1)} />
+      </RequireAdmin>
+    );
+  };
+
+  const AdminChannelsPage = () => {
+    const safeCurrentUser = createSafeCurrentUser();
+    if (!safeCurrentUser) return <Navigate to="/" replace />;
+
+    return (
+      <RequireAdmin>
+        <ChannelManagement currentUser={safeCurrentUser} onBack={() => navigate(-1)} />
+      </RequireAdmin>
+    );
+  };
+
   const AdminFeedbackPage = () => (
     <RequireAdmin>
       <FeedbackManagement onBack={() => navigate(-1)} />
