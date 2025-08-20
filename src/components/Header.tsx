@@ -186,10 +186,10 @@ const Header: React.FC<HeaderProps> = ({
       {/* Filtri - mostrati solo se showFilters è true con animazione */}
       {showFilters && onSelectFilter && (
         <div
-          className={`sticky top-16 z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700/50 overflow-hidden transition-all duration-300 ease-in-out ${
+          className={`sticky top-16 z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700/50 transition-all duration-300 ease-in-out ${
             isFiltersVisible
-              ? 'max-h-24 opacity-100 transform translate-y-0'
-              : 'max-h-0 opacity-0 transform -translate-y-2'
+              ? 'opacity-100 translate-y-0'
+              : 'opacity-0 -translate-y-2 pointer-events-none'
           }`}
         >
           <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 py-3 pb-6">

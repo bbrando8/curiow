@@ -206,6 +206,20 @@ const App: React.FC = () => {
     fetchInitialData();
   }, [firebaseUser, authReady]);
 
+  // Carica i canali anche per utenti loggati (prima venivano caricati solo se non loggati)
+  useEffect(() => {
+    if (!firebaseUser) return; // solo per utenti autenticati
+    if (channels.length > 0) return; // evita refetch inutile
+    (async () => {
+      try {
+        const fetchedChannels = await firestoreService.fetchChannels();
+        setChannels(fetchedChannels);
+      } catch (e) {
+        console.error('Errore fetch canali (utente loggato):', e);
+      }
+    })();
+  }, [firebaseUser, channels.length]);
+
   // Auth state listener
   useEffect(() => {
       const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -625,8 +639,23 @@ const App: React.FC = () => {
                   />
                 )}
 
+                {/* Card onboarding trigger invisibile */}
                 {!firebaseUser && index === 3 && !hasSeenOnboarding && (
                   <div ref={onboardingTriggerRef} style={{ height: '1px' }} />
+                )}
+
+                {/* Card promozionale dopo la 7a gem (index 6) solo per non loggati */}
+                {!firebaseUser && index === (GEMS_LIMIT_FOR_UNLOGGED_USERS - 1) && (
+                  <div className="mt-6 p-6 rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-gradient-to-br from-white via-indigo-50 to-indigo-100 dark:from-slate-900 dark:via-indigo-950 dark:to-slate-900 shadow-sm text-center">
+                    <h3 className="text-xl font-bold text-indigo-700 dark:text-indigo-300 mb-2">Vuoi vedere molte più gem?</h3>
+                    <p className="text-sm text-indigo-600 dark:text-indigo-400 mb-4">Accedi o registrati gratis per sbloccare l'intero feed, salvare idee e creare liste personalizzate.</p>
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                      <button
+                        onClick={() => setShowLoginModal(true)}
+                        className="px-5 py-2.5 text-sm font-semibold rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow"
+                      >Accedi / Registrati</button>
+                    </div>
+                  </div>
                 )}
               </React.Fragment>
             ))}
