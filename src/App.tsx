@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Gem, User, SavedList, Channel, Filter, ListWithItems, UserRole } from './types';
-import { auth, googleProvider, getIdToken } from './services/firebase';
+import { auth, googleProvider, getIdToken, trackEvent } from './services/firebase';
 import { onAuthStateChanged, User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInWithPopup } from 'firebase/auth';
 import * as firestoreService from './services/firestoreService';
 import * as feedbackService from './services/feedbackService';
@@ -65,9 +65,15 @@ const App: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Tracciamento page_view ad ogni cambio di route
+  useEffect(() => {
+    trackEvent('page_view', { page_path: location.pathname });
+  }, [location.pathname]);
+
   const handleSelectGem = async (gemId: string) => {
     setSelectedGemId(gemId);
     navigate(`/gem/${gemId}`);
+    trackEvent('select_content', { content_type: 'gem', item_id: gemId });
   };
 
   // Caricamento iniziale delle gems con paginazione
@@ -104,6 +110,7 @@ const App: React.FC = () => {
         });
         setLastVisible(result.lastVisible);
         setHasMoreGems(result.gems.length === PAGE_SIZE);
+        trackEvent('load_more', { batch_size: result.gems.length });
       } else {
         setHasMoreGems(false);
       }
@@ -254,11 +261,13 @@ const App: React.FC = () => {
   const handleSignUpAttempt = async (email: string, pass: string, firstName: string, lastName: string) => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
       await firestoreService.createUserProfile(userCredential.user.uid, email, firstName, lastName);
+      trackEvent('sign_up', { method: 'password', user_id: userCredential.user.uid });
       setShowLoginModal(false); // Chiudi il modal dopo il successo
   };
 
   const handleLoginAttempt = async (email: string, pass: string) => {
       const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+      trackEvent('login', { method: 'password', user_id: userCredential.user.uid });
       setShowLoginModal(false); // Chiudi il modal dopo il successo
       return userCredential;
   };
@@ -284,6 +293,7 @@ const App: React.FC = () => {
         await firestoreService.createUserProfile(user.uid, email, firstName, lastName);
       }
 
+      trackEvent('login', { method: 'google', user_id: user.uid });
       setShowLoginModal(false); // Chiudi il modal dopo il successo
     } catch (error: any) {
       console.error('Errore nell\'autenticazione Google:', error);
@@ -292,6 +302,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    trackEvent('logout');
     signOut(auth);
   };
 
@@ -360,7 +371,7 @@ const App: React.FC = () => {
 
     try {
       await firestoreService.addGemToUserList(firebaseUser.uid, listId, gemToSaveId);
-
+      trackEvent('add_to_list', { list_id: listId, gem_id: gemToSaveId });
       // Aggiorna lo stato locale
       const updatedLists = userLists.map(list => {
         if (list.id === listId && !list.gemIds.includes(gemToSaveId)) {
@@ -386,7 +397,7 @@ const App: React.FC = () => {
       try {
         const newListId = await firestoreService.createNewList(firebaseUser.uid, listName);
         await firestoreService.addGemToUserList(firebaseUser.uid, newListId, gemToSaveId);
-
+        trackEvent('create_list', { list_id: newListId, gem_id: gemToSaveId });
         // Aggiungi la nuova lista allo stato locale
         const newList: ListWithItems = {
           id: newListId,
@@ -412,7 +423,7 @@ const App: React.FC = () => {
 
     try {
       await firestoreService.createNewList(firebaseUser.uid, listName);
-
+      trackEvent('create_list', { list_name: listName });
       // Ricarica le liste dopo la creazione
       const updatedLists = await firestoreService.fetchUserListsNew(firebaseUser.uid);
       setUserLists(updatedLists);
@@ -511,6 +522,7 @@ const App: React.FC = () => {
         section,
         message
       );
+      trackEvent('feedback_submit', { section });
       // Mostra animazione di successo sul pulsante invece dell'alert
       if (feedbackButtonRef.current?.showSuccess) {
         feedbackButtonRef.current.showSuccess();

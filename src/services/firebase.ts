@@ -1,6 +1,8 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+// Aggiunta Analytics
+import { getAnalytics, isSupported, logEvent, type Analytics } from 'firebase/analytics';
 
 // ATTENZIONE: Sostituisci questo oggetto con la configurazione del tuo progetto Firebase!
 const firebaseConfig = {
@@ -15,6 +17,22 @@ const firebaseConfig = {
 
 // Inizializza Firebase
 const app = initializeApp(firebaseConfig);
+
+// Inizializzazione lazy di Analytics (solo browser + supporto)
+let analyticsInstance: Analytics | null = null;
+if (typeof window !== 'undefined') {
+  isSupported().then(supported => {
+    if (supported) {
+      analyticsInstance = getAnalytics(app);
+    }
+  }).catch(() => {/* ignore */});
+}
+
+export const getAnalyticsInstance = () => analyticsInstance;
+export const trackEvent = (eventName: string, params?: Record<string, any>) => {
+  if (!analyticsInstance) return;
+  try { logEvent(analyticsInstance, eventName as any, params); } catch { /* noop */ }
+};
 
 // Configura Google Auth Provider
 export const googleProvider = new GoogleAuthProvider();
