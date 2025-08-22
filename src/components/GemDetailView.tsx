@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Gem, UserQuestion, User, Filter, Channel } from '../types';
-import { ChevronLeftIcon, HeartIcon, ShareIcon, PaperAirplaneIcon, SparklesIcon, PlusCircleIcon, TagIcon, LinkIcon, ChevronDownIcon, LightBulbIcon, BookOpenIcon } from './icons';
+import { ChevronLeftIcon, HeartIcon, ShareIcon, PaperAirplaneIcon, SparklesIcon, PlusCircleIcon, TagIcon, LinkIcon, ChevronDownIcon, LightBulbIcon, BookOpenIcon, FacebookIcon, InstagramIcon, WhatsappIcon, MailIcon, CopyIcon } from './icons';
+import { trackEvent } from '../services/firebase';
+import { usePageMeta } from '../hooks/usePageMeta';
 import Header from './Header';
 
 interface GemDetailViewProps {
@@ -48,6 +50,50 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   const tipsRef = useRef<HTMLDivElement | null>(null);
   const saggioRef = useRef<HTMLDivElement | null>(null);
   const [contentHeight, setContentHeight] = useState<number>(0);
+  const [showShareBar, setShowShareBar] = useState(false);
+
+  const currentUrl = typeof window !== 'undefined' ? `${window.location.origin}/gem/${gem.id}` : '';
+  const rawSummary: string = (gem as any)?.content?.summary || '';
+  const rawDescription: string = (gem as any)?.content?.description || '';
+  const baseText = rawSummary || rawDescription;
+  const descriptionSnippet = baseText ? baseText.replace(/\s+/g,' ').slice(0,180) : 'Gemme di conoscenza su Curiow.';
+  const shareText = `Scopri questa gemma su Curiow: ${gem.title}`;
+
+  usePageMeta({
+    title: `${gem.title} | Curiow`,
+    description: descriptionSnippet,
+    image: gem.imageUrl,
+    url: currentUrl,
+    type: 'article'
+  });
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(currentUrl);
+    } catch {
+      const tmp = document.createElement('input');
+      tmp.value = currentUrl; document.body.appendChild(tmp); tmp.select(); document.execCommand('copy'); document.body.removeChild(tmp);
+    }
+    trackEvent('share', { channel: 'copy_link', gem_id: gem.id });
+    alert('Link copiato!');
+  };
+
+  const handleNativeShare = async () => {
+    if (navigator.share) {
+      trackEvent('share_attempt', { channel: 'web_share', gem_id: gem.id });
+      try {
+        await navigator.share({ title: gem.title, text: shareText, url: currentUrl });
+        trackEvent('share', { channel: 'web_share', gem_id: gem.id });
+      } catch { /* annullato */ }
+    } else {
+      handleCopyLink();
+    }
+  };
+
+  const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(currentUrl)}`;
+  const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText + ' ' + currentUrl)}`;
+  const emailUrl = `mailto:?subject=${encodeURIComponent('Consiglio: ' + gem.title)}&body=${encodeURIComponent(shareText + '\n' + currentUrl)}`;
+  // Instagram non ha share URL web: fallback copia link
 
   // funzione misura altezza contenuto attivo
   const measureActiveHeight = () => {
@@ -381,13 +427,41 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                         <span className="text-sm font-medium">{isFavorite ? 'Rimuovi' : 'Salva'}</span>
                     </button>
                     <button
-                        onClick={handleShare}
+                        onClick={()=> setShowShareBar(v=>{const nv=!v; trackEvent('share_bar_toggle',{ open: nv, gem_id: gem.id }); return nv;})}
                         className="flex items-center space-x-1.5 text-slate-600 dark:text-slate-300 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
                     >
                         <ShareIcon className="w-6 h-6" />
                         <span className="text-sm font-medium">Condividi</span>
                     </button>
+                    {navigator.share && (
+                      <button
+                        onClick={handleNativeShare}
+                        className="hidden sm:inline-flex items-center space-x-1.5 text-slate-500 dark:text-slate-400 hover:text-indigo-500 dark:hover:text-indigo-400 text-xs"
+                      >
+                        <span>Share rapido</span>
+                      </button>
+                    )}
                 </div>
+                {showShareBar && (
+                  <div className="mt-3 flex flex-wrap gap-2 items-center animate-fade-in">
+                    <a href={facebookUrl} onClick={()=>trackEvent('share',{channel:'facebook', gem_id: gem.id})} target="_blank" rel="noopener noreferrer" title="Facebook" className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-700 text-[#1877F2] transition-colors" aria-label="Condividi su Facebook">
+                      <FacebookIcon className="w-5 h-5" />
+                    </a>
+                    <button onClick={()=>{handleCopyLink(); trackEvent('share',{channel:'instagram_copy', gem_id: gem.id});}} title="Instagram (copia link)" className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-pink-100 dark:hover:bg-pink-700 text-pink-500 transition-colors" aria-label="Condividi su Instagram (copia link)">
+                      <InstagramIcon className="w-5 h-5" />
+                    </button>
+                    <a href={whatsappUrl} onClick={()=>trackEvent('share',{channel:'whatsapp', gem_id: gem.id})} target="_blank" rel="noopener noreferrer" title="WhatsApp" className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-emerald-100 dark:hover:bg-emerald-700 text-emerald-500 transition-colors" aria-label="Condividi su WhatsApp">
+                      <WhatsappIcon className="w-5 h-5" />
+                    </a>
+                    <a href={emailUrl} onClick={()=>trackEvent('share',{channel:'email', gem_id: gem.id})} title="Email" className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-700 text-indigo-500 transition-colors" aria-label="Condividi via Email">
+                      <MailIcon className="w-5 h-5" />
+                    </a>
+                    <button onClick={handleCopyLink} title="Copia link" className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors" aria-label="Copia link">
+                      <CopyIcon className="w-5 h-5" />
+                    </button>
+                  </div>
+                )}
+
                 {gem.tags && gem.tags.length > 0 && (
                     <div className="mt-4 flex flex-wrap gap-2 items-center">
                         <TagIcon className="w-5 h-5 text-slate-400 dark:text-slate-500"/>
