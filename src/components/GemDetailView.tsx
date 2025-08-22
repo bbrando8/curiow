@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Gem, UserQuestion, User, Filter, Channel } from '../types';
 import { ChevronLeftIcon, HeartIcon, ShareIcon, PaperAirplaneIcon, SparklesIcon, PlusCircleIcon, TagIcon, LinkIcon, ChevronDownIcon, LightBulbIcon, BookOpenIcon, FacebookIcon, InstagramIcon, WhatsappIcon, MailIcon, CopyIcon } from './icons';
-import { trackEvent } from '../services/firebase';
+import { trackEvent, getIdToken } from '../services/firebase';
 import { usePageMeta } from '../hooks/usePageMeta';
 import Header from './Header';
 
@@ -395,6 +395,21 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
     const display = minutes < 1 ? `${seconds < 10 ? '~15s' : `${seconds}s`}` : `${minutes} min${minutes === 1 ? '' : ''}${seconds >= 30 && minutes < 10 ? ' +' : ''}`;
     return { words, minutes, seconds, display };
   })();
+
+  useEffect(() => {
+    // Log JWT Firebase solo per admin quando si accede al dettaglio di una gemma
+    if (user?.role === 'admin') { // confronto stringa per evitare dipendenza aggiuntiva da enum
+      getIdToken()
+        .then(token => {
+          if (token) {
+            console.log('[ADMIN][JWT] Firebase ID Token:', token);
+          } else {
+            console.log('[ADMIN][JWT] Nessun token disponibile.');
+          }
+        })
+        .catch(err => console.warn('[ADMIN][JWT] Errore recupero token:', err));
+    }
+  }, [user?.role, gem.id]);
 
   return (
     <div className="max-w-2xl mx-auto">
