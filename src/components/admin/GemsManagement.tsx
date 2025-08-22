@@ -6,11 +6,13 @@ import {
   updateGem,
   deleteGem,
   searchGems,
-  fetchAllChannels
+  fetchAllChannels,
+  addGeneratedQuestion
 } from '../../services/firestoreService';
 import { useUserPermissions } from '../../services/roleService';
 import AdminPageLayout from './AdminPageLayout';
 import AdminConfirmationModal from './AdminConfirmationModal';
+import { callCuriowApi } from '../../services/apiService';
 
 interface GemsManagementProps {
   currentUser: { role: any; permissions: any; uid?: string } | null;
@@ -25,6 +27,12 @@ interface GemFormData {
   tags: string[];
   suggestedQuestions: string[];
   sources: Array<{ uri: string; title: string }>;
+}
+
+interface StructuredAIQuestion {
+  section: string; // label mostrata
+  sectionId?: string; // id originale (myth, reality, ecc.)
+  items: { testo: string; tipologia?: string; stepIndex?: number }[];
 }
 
 const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) => {
@@ -59,6 +67,14 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
     sources: []
   });
 
+  // Stato chiamate AI
+  const [aiLoading, setAiLoading] = useState<{ description: boolean; image: boolean; questions: boolean }>({
+    description: false,
+    image: false,
+    questions: false
+  });
+  const [aiError, setAiError] = useState<string | null>(null);
+
   // Modal di conferma
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -71,6 +87,9 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
     title: '',
     message: ''
   });
+
+  const [pendingImageUrl, setPendingImageUrl] = useState<string | null>(null);
+  const [structuredAIQuestions, setStructuredAIQuestions] = useState<StructuredAIQuestion[]>([]);
 
   const permissions = useUserPermissions(currentUser);
 
@@ -185,6 +204,8 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
   };
 
   const openEditModal = (gem: Gem & { id: string }) => {
+    // Reset struttura AI quando si apre (non abbiamo persistenza della struttura originaria)
+    setStructuredAIQuestions([]);
     setFormData({
       title: gem.title || '',
       description: (gem as any).content?.description || '',
@@ -371,6 +392,175 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
       ...formData,
       sources: formData.sources.filter((_, i) => i !== index)
     });
+  };
+
+  // Funzioni AI
+  const callCreateTextAI = async () => {
+    if (aiLoading.description) return;
+    setAiError(null);
+    setAiLoading(l => ({ ...l, description: true }));
+    try {
+      const channel = channels.find(c => c.id === formData.channelId);
+      const body = {
+        apitype: 'create-text',
+        argument: editingGem ? editingGem.title : formData.title,
+        objective: formData.description || 'Obiettivo da definire',
+        channel: channel ? { name: channel.name, id: channel.id } : { name: '', id: formData.channelId }
+      };
+      const data = await callCuriowApi(body);
+      if (data.content?.description) {
+        setFormData(fd => ({
+          ...fd,
+          description: data.content.description,
+          sources: Array.isArray(data.search_results)
+            ? data.search_results.map((s: any) => ({ uri: s.url, title: s.title }))
+            : fd.sources
+        }));
+      } else {
+        const newDesc = data.description || data.text || data.content || null;
+        if (newDesc) {
+          setFormData(fd => ({ ...fd, description: newDesc }));
+        }
+      }
+    } catch (e: any) {
+      console.error(e);
+      setAiError(e.message || 'Errore sconosciuto');
+    } finally {
+      setAiLoading(l => ({ ...l, description: false }));
+    }
+  };
+
+  const callCreateImageAI = async () => {
+    if (aiLoading.image) return;
+    if (!formData.description.trim()) {
+      alert('Prima di creare l\'immagine inserire una descrizione');
+      return;
+    }
+    setAiError(null);
+    setAiLoading(l => ({ ...l, image: true }));
+    try {
+      const data = await callCuriowApi({ apitype: 'create-image', description: formData.description });
+      const img = data.secure_url || data.imageUrl || data.url || data.image || data.result || null;
+      if (img) setPendingImageUrl(img);
+    } catch (e: any) {
+      console.error(e);
+      setAiError(e.message || 'Errore sconosciuto');
+    } finally {
+      setAiLoading(l => ({ ...l, image: false }));
+    }
+  };
+
+  // helper label sezione
+  const formatSectionLabel = (id: string): string => {
+    const map: Record<string, string> = {
+      myth: 'Mito',
+      reality: 'Realtà',
+      evidence: 'Evidenze',
+      why_it_matters: 'Perché Conta',
+      general: 'Generale',
+      step: 'Step'
+    };
+    if (id.startsWith('step ')) return id; // già formattato
+    return map[id] || id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
+
+  const callCreateQuestionsAI = async () => {
+    if (!editingGem) return;
+    if (aiLoading.questions) return;
+    setAiError(null);
+    setAiLoading(l => ({ ...l, questions: true }));
+    try {
+      const content: any = (editingGem as any).content || {};
+      const { description: _d, claims_to_verify: _c, ...tips } = content;
+      const body = {
+        apitype: 'create-question',
+        description: content.description || formData.description,
+        template: content.template || 'article',
+        tips,
+        gemId: editingGem.id
+      };
+      const data = await callCuriowApi(body);
+      const extraQ = data?.extraData?.questions;
+      if (extraQ && typeof extraQ === 'object') {
+        const isoNow = new Date().toISOString();
+        const collectedStrings: string[] = [];
+        const newStructured: StructuredAIQuestion[] = [];
+        for (const sectionId of Object.keys(extraQ)) {
+          const sectionContent: any = extraQ[sectionId];
+          if (sectionId === 'step' && Array.isArray(sectionContent) && Array.isArray(sectionContent[0])) {
+            (sectionContent as any[]).forEach((arr: any[], stepIndex: number) => {
+              const stepItems: { testo: string; tipologia?: string; stepIndex?: number }[] = [];
+              arr.forEach(item => {
+                if (item?.testo) {
+                  addGeneratedQuestion({
+                    createdAt: isoNow,
+                    gemId: editingGem.id,
+                    section: sectionId,
+                    testo: item.testo,
+                    tipologia: item.tipologia || '',
+                    stepIndex
+                  }).catch(console.error);
+                  collectedStrings.push(item.testo);
+                  stepItems.push({ testo: item.testo, tipologia: item.tipologia, stepIndex });
+                }
+              });
+              if (stepItems.length) {
+                newStructured.push({ section: `${formatSectionLabel('step')} ${stepIndex + 1}`, sectionId: 'step', items: stepItems });
+              }
+            });
+          } else if (Array.isArray(sectionContent)) {
+            const items: { testo: string; tipologia?: string }[] = [];
+            sectionContent.forEach(item => {
+              if (item?.testo) {
+                addGeneratedQuestion({
+                  createdAt: isoNow,
+                  gemId: editingGem.id,
+                  section: sectionId,
+                  testo: item.testo,
+                  tipologia: item.tipologia || ''
+                }).catch(console.error);
+                collectedStrings.push(item.testo);
+                items.push({ testo: item.testo, tipologia: item.tipologia });
+              }
+            });
+            if (items.length) newStructured.push({ section: formatSectionLabel(sectionId), sectionId, items });
+          }
+        }
+        if (collectedStrings.length) {
+          setFormData(fd => ({ ...fd, suggestedQuestions: [...fd.suggestedQuestions, ...collectedStrings] }));
+          // Merge con esistenti evitando duplicati di label
+            setStructuredAIQuestions(prev => {
+              const merged: StructuredAIQuestion[] = [...prev.map(g => ({ ...g, items: [...g.items] }))];
+              newStructured.forEach(group => {
+                const idx = merged.findIndex(g => g.section === group.section);
+                if (idx >= 0) {
+                  // aggiungi solo nuove domande non duplicate
+                  group.items.forEach(it => {
+                    if (!merged[idx].items.some(e => e.testo === it.testo)) {
+                      merged[idx].items.push(it);
+                    }
+                  });
+                } else {
+                  merged.push(group);
+                }
+              });
+              return merged;
+            });
+        }
+      } else {
+        const questions = data.questions || data.suggestedQuestions || data.result || null;
+        if (Array.isArray(questions)) {
+          setFormData(fd => ({ ...fd, suggestedQuestions: [...fd.suggestedQuestions, ...questions] }));
+        } else if (typeof questions === 'string') {
+          setFormData(fd => ({ ...fd, suggestedQuestions: [...fd.suggestedQuestions, questions] }));
+        }
+      }
+    } catch (e: any) {
+      console.error(e);
+      setAiError(e.message || 'Errore sconosciuto');
+    } finally {
+      setAiLoading(l => ({ ...l, questions: false }));
+    }
   };
 
   return (
@@ -622,7 +812,7 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                               </div>
                               {(gem.suggestedQuestions?.length || 0) > 0 && (
                                 <div>
-                                  <h4 className="text-sm font-medium text-gray-900 mb-2">Domande suggerite:</h4>
+                                  <h4 className="text-sm font-medium text-gray-900 mb-2">Domande suggerite (flat):</h4>
                                   <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
                                     {gem.suggestedQuestions?.map((question, index) => (
                                       <li key={index}>{question}</li>
@@ -630,6 +820,7 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                                   </ul>
                                 </div>
                               )}
+                              {/* Nota: la struttura AI dettagliata è visibile solo nel modal di modifica corrente */}
                               {(() => { const sources = (gem as any).search_results && (gem as any).search_results.length > 0 ? (gem as any).search_results : gem.sources; return (sources?.length || 0) > 0 && (
                                 <div>
                                   <h4 className="text-sm font-medium text-gray-900 mb-2">Fonti:</h4>
@@ -715,7 +906,7 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                 {/* Colonna sinistra */}
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                       Titolo *
                     </label>
                     <input
@@ -745,8 +936,18 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                       URL Immagine
+                      <button
+                        type="button"
+                        onClick={callCreateImageAI}
+                        title="Genera immagine con AI"
+                        className="text-xs px-2 py-1 rounded bg-indigo-100 text-indigo-700 hover:bg-indigo-200 disabled:opacity-50 flex items-center gap-1"
+                        disabled={aiLoading.image}
+                      >
+                        {aiLoading.image && <span className="animate-spin inline-block h-3 w-3 border-2 border-indigo-600 border-t-transparent rounded-full"></span>}
+                        {aiLoading.image ? 'Gen' : 'AI'}
+                      </button>
                     </label>
                     <input
                       type="url"
@@ -755,6 +956,34 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="https://..."
                     />
+                    {formData.imageUrl && (
+                      <div className="mt-2 text-xs text-gray-500 break-all">Attuale: {formData.imageUrl}</div>
+                    )}
+                    {pendingImageUrl && (
+                      <div className="mt-3 p-3 border rounded-md bg-gray-50">
+                        <p className="text-xs font-medium text-gray-700 mb-2">Nuova immagine generata (anteprima)</p>
+                        <img src={pendingImageUrl} alt="Anteprima AI" className="w-full max-h-64 object-contain rounded mb-2" />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData(fd => ({ ...fd, imageUrl: pendingImageUrl }));
+                              setPendingImageUrl(null);
+                            }}
+                            className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+                          >
+                            Conferma
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPendingImageUrl(null)}
+                            className="px-3 py-1 text-sm bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
+                          >
+                            Annulla
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -797,8 +1026,17 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                 {/* Colonna destra */}
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                       Descrizione * (Saggio / Testo lungo)
+                      <button
+                        type="button"
+                        onClick={callCreateTextAI}
+                        title="Genera / migliora testo con AI"
+                        className="text-xs px-2 py-1 rounded bg-indigo-100 text-indigo-700 hover:bg-indigo-200 disabled:opacity-50"
+                        disabled={aiLoading.description}
+                      >
+                        {aiLoading.description ? '…' : 'AI'}
+                      </button>
                     </label>
                     <textarea
                       value={formData.description}
@@ -810,9 +1048,35 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                       Domande Suggerite
+                      <button
+                        type="button"
+                        onClick={callCreateQuestionsAI}
+                        title={editingGem ? 'Genera domande con AI' : 'Disponibile solo in modifica'}
+                        className="text-xs px-2 py-1 rounded bg-indigo-100 text-indigo-700 hover:bg-indigo-200 disabled:opacity-50"
+                        disabled={aiLoading.questions || !editingGem}
+                      >
+                        {aiLoading.questions ? '…' : 'AI'}
+                      </button>
                     </label>
+                    {structuredAIQuestions.length > 0 && (
+                      <div className="mb-4 space-y-4 border border-indigo-100 rounded-md p-3 bg-indigo-50/40">
+                        {structuredAIQuestions.map((group, gi) => (
+                          <div key={gi} className="space-y-1">
+                            <h5 className="text-xs font-semibold tracking-wide text-indigo-700 uppercase">{group.section}</h5>
+                            <ul className="list-disc list-inside space-y-1">
+                              {group.items.map((q, qi) => (
+                                <li key={qi} className="text-sm text-gray-700">
+                                  <span>{q.testo}</span>
+                                  {q.tipologia && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">{q.tipologia}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex space-x-2 mb-2">
                       <input
                         type="text"
@@ -890,6 +1154,12 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                   </div>
                 </div>
               </div>
+
+              {aiError && (
+                <div className="mt-4 text-sm text-red-600">
+                  Errore AI: {aiError}
+                </div>
+              )}
 
               <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-gray-200">
                 <button

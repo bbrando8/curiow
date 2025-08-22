@@ -404,13 +404,31 @@ export const searchChannels = async (searchTerm: string): Promise<(Channel & { i
     } as Channel & { id: string }));
 
     // Filtro lato client per la ricerca
-    return allChannels.filter(channel =>
-      channel.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      channel.description.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    return allChannels.filter(c => (c as any).name?.toLowerCase().includes(searchTerm.toLowerCase()));
   } catch (error) {
     console.error("Error searching channels:", error);
     return [];
+  }
+};
+
+// --- Questions (AI generated) ---
+export interface GeneratedQuestionRecord {
+  createdAt: string; // ISO
+  gemId: string;
+  section: string;
+  testo: string;
+  tipologia: string;
+  stepIndex?: number;
+}
+
+export const addGeneratedQuestion = async (qData: GeneratedQuestionRecord): Promise<string> => {
+  try {
+    const questionsCollection = collection(db, 'questions');
+    const docRef = await addDoc(questionsCollection, qData);
+    return docRef.id;
+  } catch (error) {
+    console.error('Errore salvataggio domanda generata:', error);
+    throw error;
   }
 };
 
