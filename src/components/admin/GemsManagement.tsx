@@ -7,7 +7,8 @@ import {
   deleteGem,
   searchGems,
   fetchAllChannels,
-  addGeneratedQuestion
+  addGeneratedQuestion,
+  fetchGeneratedQuestionsByGem
 } from '../../services/firestoreService';
 import { useUserPermissions } from '../../services/roleService';
 import AdminPageLayout from './AdminPageLayout';
@@ -203,8 +204,7 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
     });
   };
 
-  const openEditModal = (gem: Gem & { id: string }) => {
-    // Reset struttura AI quando si apre (non abbiamo persistenza della struttura originaria)
+  const openEditModal = async (gem: Gem & { id: string }) => {
     setStructuredAIQuestions([]);
     setFormData({
       title: gem.title || '',
@@ -216,6 +216,59 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
       sources: (gem as any).search_results && (gem as any).search_results.length > 0 ? (gem as any).search_results : gem.sources || []
     });
     setEditingGem(gem);
+
+    // Carica domande generate salvate e raggruppale
+    try {
+      const saved = await fetchGeneratedQuestionsByGem(gem.id);
+      if (saved.length) {
+        // Ordina per createdAt asc
+        const ordered = [...saved].sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+        interface TempGroup { section: string; sectionId: string; items: { testo: string; tipologia?: string; stepIndex?: number }[]; _stepIndex?: number; }
+        const groups: TempGroup[] = [];
+        const findOrCreate = (label: string, sectionId: string, stepIndex?: number): TempGroup => {
+          if (sectionId === 'step' && typeof stepIndex === 'number') {
+            let g = groups.find(g => g.sectionId === 'step' && g._stepIndex === stepIndex);
+            if (!g) {
+              g = { section: `${formatSectionLabel('step')} ${stepIndex + 1}`, sectionId: 'step', items: [], _stepIndex: stepIndex };
+              groups.push(g);
+            }
+            return g;
+          }
+          let g = groups.find(g => g.section === label && g.sectionId === sectionId);
+          if (!g) {
+            g = { section: label, sectionId, items: [] };
+            groups.push(g);
+          }
+          return g;
+        };
+        ordered.forEach(q => {
+          const sectionId = q.section || 'general';
+            if (sectionId === 'step') {
+              const stepIdx = typeof q.stepIndex === 'number' ? q.stepIndex : 0;
+              const grp = findOrCreate(`${formatSectionLabel('step')} ${stepIdx + 1}`, 'step', stepIdx);
+              if (!grp.items.some(it => it.testo === q.testo)) {
+                grp.items.push({ testo: q.testo, tipologia: q.tipologia, stepIndex: stepIdx });
+              }
+            } else {
+              const label = formatSectionLabel(sectionId);
+              const grp = findOrCreate(label, sectionId);
+              if (!grp.items.some(it => it.testo === q.testo)) {
+                grp.items.push({ testo: q.testo, tipologia: q.tipologia });
+              }
+            }
+        });
+        // Ordina gruppi: step per stepIndex, poi alfabetico
+        const finalGroups = groups.sort((a,b) => {
+          if (a.sectionId === 'step' && b.sectionId === 'step') return (a._stepIndex||0) - (b._stepIndex||0);
+          if (a.sectionId === 'step') return -1;
+          if (b.sectionId === 'step') return 1;
+          return a.section.localeCompare(b.section);
+        }).map(({ _stepIndex, ...rest }) => rest);
+        setStructuredAIQuestions(finalGroups);
+      }
+    } catch (e) {
+      console.error('Errore caricamento domande generate salvate:', e);
+    }
   };
 
   const toggleGemExpansion = (gemId: string) => {
@@ -1092,20 +1145,6 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                       >
                         Aggiungi
                       </button>
-                    </div>
-                    <div className="space-y-2 max-h-32 overflow-y-auto">
-                      {formData.suggestedQuestions.map((question, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                          <span className="text-sm flex-1">{question}</span>
-                          <button
-                            type="button"
-                            onClick={() => removeSuggestedQuestion(index)}
-                            className="text-red-600 hover:text-red-800 ml-2"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
                     </div>
                   </div>
 

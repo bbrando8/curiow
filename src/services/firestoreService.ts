@@ -432,6 +432,18 @@ export const addGeneratedQuestion = async (qData: GeneratedQuestionRecord): Prom
   }
 };
 
+export const fetchGeneratedQuestionsByGem = async (gemId: string): Promise<GeneratedQuestionRecord[]> => {
+  try {
+    const questionsCollection = collection(db, 'questions');
+    const q = query(questionsCollection, where('gemId', '==', gemId), orderBy('createdAt', 'asc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => d.data() as GeneratedQuestionRecord);
+  } catch (error) {
+    console.error('Errore fetch domande generate:', error);
+    return [];
+  }
+};
+
 // Aggiunte funzioni per gestione gems
 export const fetchAllGems = async (): Promise<(Gem & { id: string })[]> => {
   try {
