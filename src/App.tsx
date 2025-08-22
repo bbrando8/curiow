@@ -27,6 +27,7 @@ import './utils/adminUtils';
 import './utils/migratePermissions';
 import './utils/migrateChannels';
 import { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import { getDefaultPermissions } from './services/roleService';
 
 const App: React.FC = () => {
   const [gems, setGems] = useState<Gem[]>([]);
@@ -244,6 +245,22 @@ const App: React.FC = () => {
                   const [firstName, lastName] = email.split('@')[0].split('.') || [email, ''];
                   await firestoreService.createUserProfile(currentUser.uid, email, firstName, lastName || '');
                   userProfile = await firestoreService.fetchUserProfile(currentUser.uid);
+              }
+              // Normalizzazione profili legacy senza permissions completi
+              if (userProfile) {
+                  const needsPermissionsUpdate = !userProfile.permissions || (userProfile.permissions as any).canViewDashboard === undefined;
+                  const needsRoleDefault = !userProfile.role;
+                  if (needsPermissionsUpdate || needsRoleDefault) {
+                      const role = userProfile.role || 'user';
+                      const defaultPerms = getDefaultPermissions(role as any);
+                      await firestoreService.updateUserProfile(currentUser.uid, {
+                        role: role,
+                        permissions: { ...defaultPerms, ...(userProfile.permissions || {}) },
+                        updatedAt: new Date()
+                      } as any);
+                      userProfile = await firestoreService.fetchUserProfile(currentUser.uid);
+                      console.log('[FixLegacyUser] Aggiornati permessi/ruolo utente legacy');
+                  }
               }
               const newUserLists = await firestoreService.fetchUserListsNew(currentUser.uid);
               setUser(userProfile);

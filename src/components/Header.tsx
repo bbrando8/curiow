@@ -36,6 +36,9 @@ const Header: React.FC<HeaderProps> = ({
   const menuRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const permissions = useUserPermissions(user);
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug('[Header] User role:', user?.role, 'permissions:', permissions);
+  }
 
   const openFilters = () => {
     if (fadeState === 'open' || fadeState === 'opening') return;
@@ -166,9 +169,9 @@ const Header: React.FC<HeaderProps> = ({
                       <button onClick={() => handleMenuItemClick('profile')} className="flex items-center w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
                         <UserCircleIcon className="w-4 h-4 mr-3" /> Profilo
                       </button>
-                      {permissions.canManageContent && (
+                      { (permissions.canViewDashboard || permissions.isAdmin) && (
                         <button onClick={() => handleMenuItemClick('dashboard')} className="flex items-center w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
-                          <Cog6ToothIcon className="w-4 h-4 mr-3" /> Admin
+                          <Cog6ToothIcon className="w-4 h-4 mr-3" /> Dashboard
                         </button>
                       )}
                       <div className="border-t border-slate-200 dark:border-slate-700 mt-1 pt-1">

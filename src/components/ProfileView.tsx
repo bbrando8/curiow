@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeftIcon, UserCircleIcon, Cog6ToothIcon, ShieldCheckIcon } from './icons';
 import { User, UserRole } from '../types';
+import { useUserPermissions } from '../services/roleService';
 
 interface ProfileViewProps {
     user: User;
@@ -12,6 +13,7 @@ interface ProfileViewProps {
 const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdateUser, onBack, onNavigate }) => {
     const [formData, setFormData] = useState<User>(user);
     const [isDirty, setIsDirty] = useState(false);
+    const permissions = useUserPermissions(user as any);
 
     useEffect(() => {
         setFormData(user);
@@ -103,7 +105,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, onUpdateUser, onBack, o
                         </div>
                     </section>
 
-                    {user.role === UserRole.ADMIN && (
+                    { (user.role === UserRole.ADMIN || permissions.canViewDashboard || permissions.isAdmin) && (
                         <section className="mt-10 border-t border-slate-200 dark:border-slate-700 pt-6">
                             <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center">
                                 <ShieldCheckIcon className="w-6 h-6 mr-2 text-slate-500" />

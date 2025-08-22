@@ -86,7 +86,7 @@ export const isModerator = (userRole: UserRole): boolean => {
 /**
  * Hook personalizzato per verificare i permessi dell'utente corrente
  */
-export const useUserPermissions = (user: { role: UserRole; permissions: UserPermissions } | null) => {
+export const useUserPermissions = (user: { role: UserRole; permissions?: Partial<UserPermissions> } | null) => {
   if (!user) {
     return {
       canCreateGems: false,
@@ -101,8 +101,11 @@ export const useUserPermissions = (user: { role: UserRole; permissions: UserPerm
     };
   }
 
+  const defaults = getDefaultPermissions(user.role);
+  const basePerms: UserPermissions = { ...defaults, ...(user.permissions || {}) };
+
   return {
-    ...user.permissions,
+    ...basePerms,
     isAdmin: isAdmin(user.role),
     isModerator: isModerator(user.role),
   };
