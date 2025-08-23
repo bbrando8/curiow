@@ -1,195 +1,190 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { callCuriowApi } from '../services/apiService';
-import { LightBulbIcon, SparklesIcon } from './icons';
+import { SparklesIcon } from './icons';
 
 export interface SectionQuestionData {
   id: string;
   testo: string;
   tipologia?: string;
+  element?: { name: string; index?: number }; // nuovo: contesto sezione specifico
 }
 
 interface SectionQuestionsChatProps {
   gemId: string;
-  elementName: string; // es: 'step','myth','reality','evidence','why_it_matters','general','payoff'
-  elementIndex?: number; // per step
-  questions: SectionQuestionData[];
-  buttonSize?: 'sm' | 'md';
-  align?: 'left' | 'right';
-  hideTrigger?: boolean; // se true non mostra l'icona, usato per generale
-  externalOpen?: boolean; // stato controllato esterno
-  onOpenChange?: (open: boolean) => void;
-  autoQuestionId?: string; // domanda pre-selezionata da chiedere all'apertura
-  autoCustomQuestionText?: string; // testo custom da chiedere all'apertura
+  elementName: string; // sempre 'general' per il montaggio principale
+  questions: SectionQuestionData[]; // domande generali (base)
+  autoQuestionId?: string;
+  autoCustomQuestionText?: string;
+  hideTrigger?: boolean; // mantenuta per retrocompatibilità (non usata)
+  gemTitle?: string; // nuovo: titolo gemma per header
 }
 
-interface QAState {
-  loading: boolean;
-  answer?: string;
-  error?: string;
-}
+interface ChatMessage { id: string; question: string; answer?: string; loading: boolean; error?: string; origin: 'suggested' | 'custom'; element?: { name: string; index?: number }; }
 
 const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   gemId,
   elementName,
-  elementIndex = 0,
   questions,
-  buttonSize='sm',
-  align='right',
-  hideTrigger=false,
-  externalOpen,
-  onOpenChange,
   autoQuestionId,
-  autoCustomQuestionText
+  autoCustomQuestionText,
+  gemTitle
 }) => {
-  const isControlled = externalOpen !== undefined;
-  const [internalOpen, setInternalOpen] = useState(false);
-  const open = isControlled ? !!externalOpen : internalOpen;
-  const [answers, setAnswers] = useState<Record<string, QAState>>({});
+  const [open, setOpen] = useState(false); // start chiusa
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [customInput, setCustomInput] = useState('');
-  const [customHistory, setCustomHistory] = useState<{ id: string; question: string; answer?: string; loading: boolean; error?: string }[]>([]);
+  const [dynamicSuggestions, setDynamicSuggestions] = useState<SectionQuestionData[]>([]); // suggerimenti contestuali (sezione)
+  const [baseSuggestions, setBaseSuggestions] = useState<SectionQuestionData[]>(questions);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const autoFiredRef = useRef<string | null>(null);
 
-  if (!questions || questions.length === 0) {
-    return hideTrigger ? null : (
-      <div className={align==='right'? 'float-right' : ''}></div>
-    );
-  }
+  // Aggiorna suggerimenti base se cambiano le props
+  useEffect(()=>{ setBaseSuggestions(questions); },[questions]);
 
-  const triggerClasses = buttonSize === 'sm'
-    ? 'w-8 h-8'
-    : 'w-10 h-10';
+  // Scroll verso il fondo quando nuovi messaggi
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  const setOpen = (val: boolean) => {
-    if (isControlled) {
-      onOpenChange && onOpenChange(val);
-    } else {
-      setInternalOpen(val);
-    }
-  };
+  // Ascolta eventi globali di apertura dal resto dell'app
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent).detail || {};
+      const sug: SectionQuestionData[] = detail.questions || [];
+      setDynamicSuggestions(sug);
+      setOpen(true);
+      // opzionale: focus input
+      setTimeout(()=>{
+        const input = document.getElementById('curiow-chat-input');
+        (input as HTMLInputElement | null)?.focus();
+      }, 50);
+    };
+    window.addEventListener('curiow-chat-open', handler as EventListener);
+    return () => window.removeEventListener('curiow-chat-open', handler as EventListener);
+  }, []);
 
-  const ask = async (q: { id: string; testo: string }, isCustom = false) => {
-    const qid = q.id;
-    if (!isCustom) {
-      setAnswers(prev => ({ ...prev, [qid]: { ...(prev[qid]||{}), loading: !prev[qid]?.answer, error: undefined } }));
-      if (answers[qid]?.answer) {
-        return; // già disponibile
-      }
-    } else {
-      setCustomHistory(h => h.map(item => item.id === qid ? { ...item, loading: true, error: undefined } : item));
-    }
+  const callApi = async (id: string, testo: string, origin: 'suggested'|'custom', elementCtx?: { name: string; index?: number }) => {
     try {
       const body: any = {
         apitype: 'deep-question',
         gemId,
-        questionId: isCustom ? '' : qid,
-        questionText: q.testo,
-        element: { name: elementName, index: elementIndex }
+        questionId: origin==='suggested' ? id : '',
+        questionText: testo,
+        element: elementCtx || { name: elementName, index: 0 }
       };
       const resp = await callCuriowApi(body);
       const answer = resp.answer || resp.result || resp.text || JSON.stringify(resp);
-      if (!isCustom) {
-        setAnswers(prev => ({ ...prev, [qid]: { loading: false, answer } }));
-      } else {
-        setCustomHistory(h => h.map(item => item.id === qid ? { ...item, loading: false, answer } : item));
-      }
+      setMessages(m => m.map(msg => msg.id === id ? { ...msg, loading: false, answer } : msg));
     } catch (e: any) {
       const msg = e.message || 'Errore';
-      if (!isCustom) {
-        setAnswers(prev => ({ ...prev, [qid]: { loading: false, error: msg } }));
-      } else {
-        setCustomHistory(h => h.map(item => item.id === qid ? { ...item, loading: false, error: msg } : item));
-      }
+      setMessages(m => m.map(ms => ms.id === id ? { ...ms, loading: false, error: msg } : ms));
     }
   };
 
-  const sendCustom = () => {
-    const text = customInput.trim();
-    if (!text) return;
-    const id = 'custom-' + Date.now();
-    setCustomHistory(h => [...h, { id, question: text, loading: true }]);
-    setCustomInput('');
-    ask({ id, testo: text }, true);
+  const ask = (testo: string, origin: 'suggested'|'custom', presetId?: string, elementCtx?: { name: string; index?: number }) => {
+    const id = (presetId || origin) + '-' + Date.now();
+    setMessages(m => [...m, { id, question: testo, origin, loading: true, element: elementCtx }]);
+    callApi(id, testo, origin, elementCtx);
   };
 
-  // Auto ask quando si apre
+  const sendCustom = () => {
+    const t = customInput.trim();
+    if (!t) return;
+    ask(t, 'custom');
+    setCustomInput('');
+  };
+
+  // Auto ask opzionale al mount
   useEffect(() => {
     if (!open) return;
     const token = `${autoQuestionId||''}|${autoCustomQuestionText||''}`;
     if (!token || token === '|' || autoFiredRef.current === token) return;
     autoFiredRef.current = token;
     if (autoQuestionId) {
-      const q = questions.find(q => q.id === autoQuestionId);
-      if (q) ask(q, false);
+      const q = baseSuggestions.find(q => q.id === autoQuestionId);
+      if (q) ask(q.testo, 'suggested', q.id, q.element);
     } else if (autoCustomQuestionText) {
-      const id = 'auto-custom-'+Date.now();
-      setCustomHistory(h => [...h, { id, question: autoCustomQuestionText, loading: true }]);
-      ask({ id, testo: autoCustomQuestionText }, true);
+      ask(autoCustomQuestionText, 'custom');
     }
-  }, [open, autoQuestionId, autoCustomQuestionText, questions]);
-
-  const panel = open && (
-    <div className={`absolute z-30 mt-2 w-80 max-w-[85vw] ${align==='right' ? 'right-0' : 'left-0'} origin-top-right bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 text-slate-700 dark:text-slate-200 animate-fade-in`}>
-      <div className="flex items-center justify-between mb-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">Approfondisci</h4>
-        <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-sm">✕</button>
-      </div>
-      <div className="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
-        {questions.map(q => {
-          const st = answers[q.id];
-          return (
-            <div key={q.id} className="border border-slate-200 dark:border-slate-700 rounded-md p-2 bg-slate-50 dark:bg-slate-800/50">
-              <button
-                onClick={() => ask(q)}
-                className="text-left w-full text-xs font-medium text-indigo-700 dark:text-indigo-300 hover:underline"
-              >{q.testo}</button>
-              {st?.loading && <p className="mt-1 text-[11px] italic text-slate-500 animate-pulse">Caricamento risposta...</p>}
-              {st?.error && <p className="mt-1 text-[11px] text-red-500">{st.error}</p>}
-              {st?.answer && <p className="mt-1 text-[11px] whitespace-pre-wrap leading-relaxed">{st.answer}</p>}
-            </div>
-          );
-        })}
-        {customHistory.map(item => (
-          <div key={item.id} className="border border-slate-200 dark:border-slate-700 rounded-md p-2 bg-slate-50 dark:bg-slate-800/30">
-            <p className="text-xs font-medium text-slate-600 dark:text-slate-300">{item.question}</p>
-            {item.loading && <p className="mt-1 text-[11px] italic text-slate-500 animate-pulse">Caricamento...</p>}
-            {item.error && <p className="mt-1 text-[11px] text-red-500">{item.error}</p>}
-            {item.answer && <p className="mt-1 text-[11px] whitespace-pre-wrap leading-relaxed">{item.answer}</p>}
-          </div>
-        ))}
-      </div>
-      <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={customInput}
-            onChange={e => setCustomInput(e.target.value)}
-            placeholder="Fai una domanda..."
-            className="flex-1 px-2 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            onKeyDown={e => { if (e.key === 'Enter') sendCustom(); }}
-          />
-          <button
-            onClick={sendCustom}
-            disabled={!customInput.trim()}
-            className="px-2.5 py-1.5 rounded-md bg-indigo-600 disabled:opacity-40 text-white text-xs hover:bg-indigo-700 transition"
-          >Invia</button>
-        </div>
-      </div>
-    </div>
-  );
+  }, [open, autoQuestionId, autoCustomQuestionText, baseSuggestions]);
 
   return (
-    <div className={`relative inline-block ${align === 'right' ? 'float-right' : ''}`}>
-      {!hideTrigger && (
-        <button
-          type="button"
-            onClick={() => setOpen(!open)}
-          className={`group ${triggerClasses} rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow transition focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400`}
-          title="Domande / Approfondisci"
-        >
-          <SparklesIcon className={`w-4 h-4 ${open ? 'animate-pulse' : ''}`} />
+    <div className={`fixed inset-y-0 right-0 z-50 flex flex-col w-full sm:w-[400px] md:w-[460px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-2xl transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-indigo-600 to-violet-600 text-white">
+        <div className="flex items-center gap-2 overflow-hidden pr-4 flex-1 min-w-0">
+          <SparklesIcon className="w-5 h-5 flex-shrink-0" />
+          <h3 className="text-sm font-semibold tracking-wide truncate" title={gemTitle || 'Chat'}>
+            {gemTitle || 'Chat'}
+          </h3>
+        </div>
+        <button onClick={() => setOpen(o=>!o)} className="text-white/80 hover:text-white text-sm font-medium flex-shrink-0">
+          {open ? 'Chiudi' : 'Apri'}
         </button>
-      )}
-      {panel}
+      </div>
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Suggerimenti dinamici sezione */}
+        {dynamicSuggestions.length > 0 && (
+          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Domande per la Sezione</p>
+            <div className="flex flex-wrap gap-2">
+              {dynamicSuggestions.map(q => (
+                <button key={q.id} onClick={() => ask(q.testo,'suggested', q.id, q.element)} className="px-2.5 py-1.5 rounded-full text-xs bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-700 dark:text-indigo-300 border border-indigo-400/40 dark:border-indigo-500/30 transition">{q.testo}</button>
+              ))}
+              <button onClick={()=> setDynamicSuggestions([])} className="px-2 py-1.5 text-[10px] uppercase tracking-wide bg-slate-200/70 dark:bg-slate-700/60 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-md text-slate-600 dark:text-slate-300">Nascondi</button>
+            </div>
+          </div>
+        )}
+        {/* Suggerimenti generali */}
+        {baseSuggestions.length > 0 && (
+          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Domande Generali</p>
+            <div className="flex flex-wrap gap-2">
+              {baseSuggestions.map(q => (
+                <button key={q.id} onClick={() => ask(q.testo,'suggested', q.id, q.element)} className="px-2.5 py-1.5 rounded-full text-xs bg-violet-600/10 hover:bg-violet-600/20 text-violet-700 dark:text-violet-300 border border-violet-400/40 dark:border-violet-500/30 transition">{q.testo}</button>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* Conversazione */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 custom-scrollbar">
+          {messages.length === 0 && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">Seleziona una domanda suggerita oppure scrivine una tu.</p>
+          )}
+          {messages.map(m => (
+            <div key={m.id} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-white dark:bg-slate-800 shadow-sm">
+              <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{m.question}</p>
+              {m.loading && (
+                <div className="mt-2 flex items-center gap-2 text-[12px] text-slate-500">
+                  <SparklesIcon className="w-4 h-4 animate-pulse text-indigo-400" />
+                  <span>Generazione risposta...</span>
+                </div>
+              )}
+              {m.error && <p className="mt-2 text-[12px] text-red-500">{m.error}</p>}
+              {m.answer && <p className="mt-2 text-[12px] leading-relaxed whitespace-pre-wrap text-slate-700 dark:text-slate-300">{m.answer}</p>}
+              {m.element && (
+                <p className="mt-2 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Contesto: {m.element.name}{typeof m.element.index==='number' ? ' #' + (m.element.index+1) : ''}</p>
+              )}
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+        {/* Input */}
+        <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+          <div className="flex gap-2">
+            <input
+              id="curiow-chat-input"
+              type="text"
+              value={customInput}
+              onChange={e => setCustomInput(e.target.value)}
+              placeholder="Scrivi una domanda..."
+              className="flex-1 px-3 py-2 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              onKeyDown={e => { if (e.key === 'Enter') sendCustom(); }}
+            />
+            <button
+              onClick={sendCustom}
+              disabled={!customInput.trim()}
+              className="px-4 py-2 rounded-md bg-indigo-600 disabled:opacity-40 text-white text-sm font-medium hover:bg-indigo-700 transition"
+            >Invia</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

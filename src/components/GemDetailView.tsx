@@ -54,10 +54,11 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   const [contentHeight, setContentHeight] = useState<number>(0);
   const [showShareBar, setShowShareBar] = useState(false);
   const [generatedQuestions, setGeneratedQuestions] = useState<(any)[]>([]);
-  const [generalChatOpen, setGeneralChatOpen] = useState(false);
-  const [generalAutoQId, setGeneralAutoQId] = useState<string | undefined>(undefined);
-  const [generalAutoCustom, setGeneralAutoCustom] = useState<string | undefined>(undefined);
-  const [generalCustomInput, setGeneralCustomInput] = useState('');
+  // RIMOSSI stati vecchia chat generale
+  // const [generalChatOpen, setGeneralChatOpen] = useState(false);
+  // const [generalAutoQId, setGeneralAutoQId] = useState<string | undefined>(undefined);
+  // const [generalAutoCustom, setGeneralAutoCustom] = useState<string | undefined>(undefined);
+  // const [generalCustomInput, setGeneralCustomInput] = useState('');
 
   const currentUrl = typeof window !== 'undefined' ? `${window.location.origin}/gem/${gem.id}` : '';
   const rawSummary: string = (gem as any)?.content?.summary || '';
@@ -186,6 +187,10 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
 
   const renderMiniThread = (content: any) => {
     const steps = Array.isArray(content.steps) ? content.steps : [];
+    const openChat = (section: string, index: number | undefined, qs: any[]) => {
+      const enriched = qs.map(q => ({ ...q, element: { name: section, index } }));
+      window.dispatchEvent(new CustomEvent('curiow-chat-open', { detail: { questions: enriched } }));
+    };
     return (
       <div className="mt-6 space-y-6">
         <div className="space-y-4">
@@ -198,9 +203,13 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                   {idx < steps.length -1 && <div className="flex-1 w-px bg-gradient-to-b from-indigo-400 via-indigo-300 to-transparent mt-1"/>}
                 </div>
                 {qs.length > 0 && (
-                  <div className="absolute right-2 top-2">
-                    <SectionQuestionsChat gemId={gem.id} elementName="step" elementIndex={idx} questions={qs} />
-                  </div>
+                  <button
+                    onClick={() => openChat('step', idx, qs)}
+                    title="Domande / Approfondisci"
+                    className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
+                  >
+                    <SparklesIcon className="w-4 h-4" />
+                  </button>
                 )}
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{s.title}</h3>
                 <p className="mt-1 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{s.body}</p>
@@ -211,9 +220,13 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
         {content.payoff && (
           <div className="p-5 rounded-xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-indigo-500/10 border border-emerald-400/30 dark:border-emerald-400/20 relative">
             {getSectionQuestions('payoff').length > 0 && (
-              <div className="absolute right-2 top-2">
-                <SectionQuestionsChat gemId={gem.id} elementName="payoff" questions={getSectionQuestions('payoff')} />
-              </div>
+              <button
+                onClick={() => openChat('payoff', undefined, getSectionQuestions('payoff'))}
+                title="Domande / Approfondisci"
+                className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
+              >
+                <SparklesIcon className="w-4 h-4" />
+              </button>
             )}
             <div className="flex items-start">
               <SparklesIcon className="w-6 h-6 text-emerald-500 mr-3 mt-0.5"/>
@@ -229,23 +242,35 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   };
 
   const renderMythVsReality = (content: any) => {
+    const openChat = (section: string, qs: any[]) => {
+      const enriched = qs.map(q => ({ ...q, element: { name: section } }));
+      window.dispatchEvent(new CustomEvent('curiow-chat-open', { detail: { questions: enriched } }));
+    };
     return (
       <div className="mt-6 space-y-6">
         <div className="grid md:grid-cols-2 gap-4">
           <div className="p-5 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 relative">
             {getSectionQuestions('myth').length > 0 && (
-              <div className="absolute right-2 top-2">
-                <SectionQuestionsChat gemId={gem.id} elementName="myth" questions={getSectionQuestions('myth')} />
-              </div>
+              <button
+                onClick={() => openChat('myth', getSectionQuestions('myth'))}
+                title="Domande / Approfondisci"
+                className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
+              >
+                <SparklesIcon className="w-4 h-4" />
+              </button>
             )}
             <p className="text-xs font-bold uppercase tracking-wide text-rose-600 dark:text-rose-300">Mito</p>
             <p className="mt-2 text-rose-800 dark:text-rose-200 font-medium leading-relaxed whitespace-pre-wrap">{content.myth}</p>
           </div>
           <div className="p-5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 relative overflow-hidden">
             {getSectionQuestions('reality').length > 0 && (
-              <div className="absolute right-2 top-2">
-                <SectionQuestionsChat gemId={gem.id} elementName="reality" questions={getSectionQuestions('reality')} />
-              </div>
+              <button
+                onClick={() => openChat('reality', getSectionQuestions('reality'))}
+                title="Domande / Approfondisci"
+                className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
+              >
+                <SparklesIcon className="w-4 h-4" />
+              </button>
             )}
             <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_80%_20%,rgba(16,185,129,0.15),transparent_60%)]"/>
             <p className="text-xs font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">Realtà</p>
@@ -255,9 +280,13 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
         {content.evidence && (
           <div className="p-4 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 relative">
             {getSectionQuestions('evidence').length > 0 && (
-              <div className="absolute right-2 top-2">
-                <SectionQuestionsChat gemId={gem.id} elementName="evidence" questions={getSectionQuestions('evidence')} />
-              </div>
+              <button
+                onClick={() => openChat('evidence', getSectionQuestions('evidence'))}
+                title="Domande / Approfondisci"
+                className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
+              >
+                <SparklesIcon className="w-4 h-4" />
+              </button>
             )}
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Evidenze</p>
             <p className="mt-1 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{content.evidence}</p>
@@ -266,9 +295,13 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
         {content.why_it_matters && (
           <div className="p-5 rounded-xl bg-gradient-to-r from-indigo-500/10 via-violet-500/10 to-fuchsia-500/10 border border-indigo-300/30 dark:border-indigo-300/20 relative">
             {getSectionQuestions('why_it_matters').length > 0 && (
-              <div className="absolute right-2 top-2">
-                <SectionQuestionsChat gemId={gem.id} elementName="why_it_matters" questions={getSectionQuestions('why_it_matters')} />
-              </div>
+              <button
+                onClick={() => openChat('why_it_matters', getSectionQuestions('why_it_matters'))}
+                title="Domande / Approfondisci"
+                className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
+              >
+                <SparklesIcon className="w-4 h-4" />
+              </button>
             )}
             <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Perché conta</p>
             <p className="mt-2 font-medium text-slate-900 dark:text-slate-100 leading-relaxed whitespace-pre-wrap">{content.why_it_matters}</p>
@@ -463,7 +496,8 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   }, [user?.role, gem.id]);
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <>
+      <div className="max-w-2xl mx-auto">
         <Header
           isLoggedIn={isLoggedIn}
           user={user}
@@ -619,52 +653,9 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                 )}
 
                 {/* Domande Generali (prima delle fonti) */}
-                {generalQuestions.length>0 && (
+                {false && generalQuestions.length>0 && (
                   <section className="mt-10 border-t border-slate-200 dark:border-slate-700 pt-6 relative space-y-4">
-                    <div>
-                      <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2 flex items-center"><LightBulbIcon className="w-5 h-5 mr-2 text-indigo-500"/>Domande Generali</h2>
-                      <div className="flex flex-wrap gap-2">
-                        {generalQuestions.map(q => (
-                          <button
-                            key={q.id}
-                            onClick={() => {
-                              setGeneralAutoCustom(undefined);
-                              setGeneralAutoQId(q.id);
-                              setGeneralChatOpen(true);
-                            }}
-                            className="px-3 py-1.5 text-xs rounded-full border border-indigo-300 dark:border-indigo-600 text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-800/50 transition-colors"
-                          >{q.testo}</button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex gap-2 items-center max-w-md">
-                      <input
-                        type="text"
-                        value={generalCustomInput}
-                        onChange={e=>setGeneralCustomInput(e.target.value)}
-                        placeholder="Scrivi una tua domanda..."
-                        className="flex-1 px-3 py-2 text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        onKeyDown={e=>{ if(e.key==='Enter' && generalCustomInput.trim()){ setGeneralAutoQId(undefined); setGeneralAutoCustom(generalCustomInput.trim()); setGeneralChatOpen(true); } }}
-                      />
-                      <button
-                        onClick={()=>{ if(!generalCustomInput.trim()) return; setGeneralAutoQId(undefined); setGeneralAutoCustom(generalCustomInput.trim()); setGeneralChatOpen(true); }}
-                        disabled={!generalCustomInput.trim()}
-                        className="px-4 py-2 text-sm rounded-md bg-indigo-600 disabled:opacity-40 text-white hover:bg-indigo-700 transition"
-                      >Chiedi</button>
-                    </div>
-                    {/* Chat controllata */}
-                    <div className="relative">
-                      <SectionQuestionsChat
-                        gemId={gem.id}
-                        elementName="general"
-                        questions={generalQuestions}
-                        hideTrigger
-                        externalOpen={generalChatOpen}
-                        onOpenChange={(o)=>{ setGeneralChatOpen(o); if(!o){ setGeneralAutoQId(undefined); setGeneralAutoCustom(undefined);} }}
-                        autoQuestionId={generalAutoQId}
-                        autoCustomQuestionText={generalAutoCustom}
-                      />
-                    </div>
+                    {/* Sezione disattivata: ora sidepanel dedicato */}
                   </section>
                 )}
 
@@ -702,7 +693,14 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                 ); })()}
             </div>
         </article>
-    </div>
+      </div>
+      <SectionQuestionsChat
+        gemId={gem.id}
+        elementName="general"
+        questions={generalQuestions.map(q=>({...q, element:{ name: 'general', index:0 }}))}
+        gemTitle={gem.title}
+      />
+    </>
   );
 };
 
