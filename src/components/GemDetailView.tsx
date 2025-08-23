@@ -188,7 +188,16 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   const renderMiniThread = (content: any) => {
     const steps = Array.isArray(content.steps) ? content.steps : [];
     const openChat = (section: string, index: number | undefined, qs: any[]) => {
-      const enriched = qs.map(q => ({ ...q, element: { name: section, index } }));
+      const enriched = qs.map(q => {
+        if (section === 'step' && typeof index === 'number') {
+          const step = steps[index] || {};
+          return { ...q, element: { name: section, index, title: step.title || null, test: step.body || null } };
+        }
+        if (section === 'payoff') {
+          return { ...q, element: { name: section, title: 'Payoff', test: content.payoff || null } };
+        }
+        return { ...q, element: { name: section } };
+      });
       window.dispatchEvent(new CustomEvent('curiow-chat-open', { detail: { questions: enriched } }));
     };
     return (
@@ -243,7 +252,15 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
 
   const renderMythVsReality = (content: any) => {
     const openChat = (section: string, qs: any[]) => {
-      const enriched = qs.map(q => ({ ...q, element: { name: section } }));
+      const enriched = qs.map(q => {
+        switch(section){
+          case 'myth': return { ...q, element: { name: section, title: 'Mito', test: content.myth || null } };
+          case 'reality': return { ...q, element: { name: section, title: 'Realtà', test: content.reality || null } };
+          case 'evidence': return { ...q, element: { name: section, title: 'Evidenze', test: content.evidence || null } };
+          case 'why_it_matters': return { ...q, element: { name: section, title: 'Perché conta', test: content.why_it_matters || null } };
+          default: return { ...q, element: { name: section } };
+        }
+      });
       window.dispatchEvent(new CustomEvent('curiow-chat-open', { detail: { questions: enriched } }));
     };
     return (
@@ -697,8 +714,9 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
       <SectionQuestionsChat
         gemId={gem.id}
         elementName="general"
-        questions={generalQuestions.map(q=>({...q, element:{ name: 'general', index:0 }}))}
+        questions={generalQuestions.map(q=>({...q, element:{ name: 'general', index:0, title: null, test: null }}))}
         gemTitle={gem.title}
+        gemDescription={rawDescription || rawSummary || ''}
       />
     </>
   );

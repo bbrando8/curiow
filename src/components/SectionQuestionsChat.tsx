@@ -6,20 +6,34 @@ export interface SectionQuestionData {
   id: string;
   testo: string;
   tipologia?: string;
-  element?: { name: string; index?: number }; // nuovo: contesto sezione specifico
+  element?: { name: string; index?: number; title?: string|null; test?: string|null }; // arricchito con title/test
 }
 
 interface SectionQuestionsChatProps {
   gemId: string;
-  elementName: string; // sempre 'general' per il montaggio principale
-  questions: SectionQuestionData[]; // domande generali (base)
+  elementName: string; // 'general'
+  questions: SectionQuestionData[];
   autoQuestionId?: string;
   autoCustomQuestionText?: string;
-  hideTrigger?: boolean; // mantenuta per retrocompatibilità (non usata)
-  gemTitle?: string; // nuovo: titolo gemma per header
+  hideTrigger?: boolean;
+  gemTitle?: string;
+  gemDescription?: string; // nuovo: per body description
 }
 
-interface ChatMessage { id: string; question: string; answer?: string; loading: boolean; error?: string; origin: 'suggested' | 'custom'; element?: { name: string; index?: number }; }
+interface ChatMessage { id: string; question: string; answer?: string; loading: boolean; error?: string; origin: 'suggested' | 'custom'; element?: { name: string; index?: number; title?: string|null; test?: string|null }; followUps?: string[]; }
+
+// Utility: sessionId giornaliero persistente
+const getDailySessionId = (): string => {
+  if (typeof window === 'undefined') return 'session-server';
+  const todayKey = new Date().toISOString().slice(0,10); // YYYY-MM-DD
+  const storageKey = 'curiowChatSession:' + todayKey;
+  let sid = localStorage.getItem(storageKey);
+  if (!sid) {
+    sid = (crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)) + '-d';
+    localStorage.setItem(storageKey, sid);
+  }
+  return sid;
+};
 
 const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   gemId,
@@ -27,7 +41,8 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   questions,
   autoQuestionId,
   autoCustomQuestionText,
-  gemTitle
+  gemTitle,
+  gemDescription
 }) => {
   const [open, setOpen] = useState(false); // start chiusa
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -36,6 +51,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   const [baseSuggestions, setBaseSuggestions] = useState<SectionQuestionData[]>(questions);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const autoFiredRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string>(getDailySessionId());
 
   // Aggiorna suggerimenti base se cambiano le props
   useEffect(()=>{ setBaseSuggestions(questions); },[questions]);
@@ -50,7 +66,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
       const sug: SectionQuestionData[] = detail.questions || [];
       setDynamicSuggestions(sug);
       setOpen(true);
-      // opzionale: focus input
+      // focus input
       setTimeout(()=>{
         const input = document.getElementById('curiow-chat-input');
         (input as HTMLInputElement | null)?.focus();
@@ -60,25 +76,46 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
     return () => window.removeEventListener('curiow-chat-open', handler as EventListener);
   }, []);
 
-  const callApi = async (id: string, testo: string, origin: 'suggested'|'custom', elementCtx?: { name: string; index?: number }) => {
+  // Aggiorna sessionId se cambia giorno (poll semplice ogni ora)
+  useEffect(() => {
+    const interval = setInterval(()=>{
+      const current = sessionIdRef.current.split(':')[0];
+      const today = new Date().toISOString().slice(0,10);
+      if (!sessionIdRef.current.includes(today)) {
+        sessionIdRef.current = getDailySessionId();
+      }
+    }, 1000 * 60 * 60);
+    return () => clearInterval(interval);
+  }, []);
+
+  const buildBody = (elementCtx?: { name: string; index?: number; title?: string|null; test?: string|null }) => {
+    return {
+      apitype: 'deep-question',
+      gemId,
+      description: gemDescription || '',
+      element: {
+        name: elementCtx?.name || elementName,
+        title: (elementCtx?.title ?? null) || null,
+        test: (elementCtx?.test ?? null) || null
+      },
+      sessionId: sessionIdRef.current
+    };
+  };
+
+  const callApi = async (id: string, testo: string, origin: 'suggested'|'custom', elementCtx?: { name: string; index?: number; title?: string|null; test?: string|null }) => {
     try {
-      const body: any = {
-        apitype: 'deep-question',
-        gemId,
-        questionId: origin==='suggested' ? id : '',
-        questionText: testo,
-        element: elementCtx || { name: elementName, index: 0 }
-      };
+      const body = buildBody(elementCtx);
       const resp = await callCuriowApi(body);
-      const answer = resp.answer || resp.result || resp.text || JSON.stringify(resp);
-      setMessages(m => m.map(msg => msg.id === id ? { ...msg, loading: false, answer } : msg));
+      const answer = resp.response || resp.answer || resp.result || resp.text || JSON.stringify(resp);
+      const followUps: string[] | undefined = Array.isArray(resp.questions) ? resp.questions : undefined;
+      setMessages(m => m.map(msg => msg.id === id ? { ...msg, loading: false, answer, followUps } : msg));
     } catch (e: any) {
       const msg = e.message || 'Errore';
       setMessages(m => m.map(ms => ms.id === id ? { ...ms, loading: false, error: msg } : ms));
     }
   };
 
-  const ask = (testo: string, origin: 'suggested'|'custom', presetId?: string, elementCtx?: { name: string; index?: number }) => {
+  const ask = (testo: string, origin: 'suggested'|'custom', presetId?: string, elementCtx?: { name: string; index?: number; title?: string|null; test?: string|null }) => {
     const id = (presetId || origin) + '-' + Date.now();
     setMessages(m => [...m, { id, question: testo, origin, loading: true, element: elementCtx }]);
     callApi(id, testo, origin, elementCtx);
@@ -91,7 +128,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
     setCustomInput('');
   };
 
-  // Auto ask opzionale al mount
+  // Auto ask opzionale al mount (solo se si apre programmaticamente)
   useEffect(() => {
     if (!open) return;
     const token = `${autoQuestionId||''}|${autoCustomQuestionText||''}`;
@@ -158,8 +195,22 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
               )}
               {m.error && <p className="mt-2 text-[12px] text-red-500">{m.error}</p>}
               {m.answer && <p className="mt-2 text-[12px] leading-relaxed whitespace-pre-wrap text-slate-700 dark:text-slate-300">{m.answer}</p>}
+              {m.followUps && m.followUps.length>0 && (
+                <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Nuove domande suggerite</p>
+                  <div className="flex flex-wrap gap-2">
+                    {m.followUps.map((fu, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => ask(fu, 'suggested')}
+                        className="px-2.5 py-1 rounded-full bg-indigo-600/10 hover:bg-indigo-600/20 text-[11px] text-indigo-700 dark:text-indigo-300 border border-indigo-400/30 dark:border-indigo-500/30 transition"
+                      >{fu}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {m.element && (
-                <p className="mt-2 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Contesto: {m.element.name}{typeof m.element.index==='number' ? ' #' + (m.element.index+1) : ''}</p>
+                <p className="mt-2 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Contesto: {m.element.title || m.element.name}{typeof m.element.index==='number' ? ' #' + (m.element.index+1) : ''}</p>
               )}
             </div>
           ))}
