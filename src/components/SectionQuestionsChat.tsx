@@ -59,6 +59,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   const [hideInitialSuggestions, setHideInitialSuggestions] = useState(false);
   const [sessionCreated, setSessionCreated] = useState(false);
   const [firstQuestionSet, setFirstQuestionSet] = useState(false);
+  const [hasExistingHistory, setHasExistingHistory] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const autoFiredRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string>('');
@@ -148,6 +149,24 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
     ask(followUp, 'custom');
   };
 
+  // Normalizza una entry di history esterna
+  const normalizeHistoryEntry = (h: any): ChatMessage => {
+    const answer = h.answer || h.response || undefined;
+    const followUps = Array.isArray(h.followUps) ? h.followUps : (Array.isArray(h.questions) ? h.questions : undefined);
+    const createdAt = h.createdAt instanceof Date ? h.createdAt : new Date(h.createdAt?.seconds ? h.createdAt.seconds * 1000 : Date.now());
+    return {
+      id: h.id,
+      question: h.question || h.prompt || '(domanda)',
+      answer,
+      followUps,
+      origin: 'custom',
+      loading: false,
+      element: h.element || undefined,
+      historyId: h.id,
+      createdAt
+    };
+  };
+
   // Genera solo l'ID sessione quando cambia la gemma o l'utente
   useEffect(() => {
     sessionIdRef.current = '';
@@ -196,7 +215,6 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
     const useSessionHandler = async (ev: Event) => {
       const { sessionId } = (ev as CustomEvent).detail || {};
       if (!sessionId) return;
-      console.log('[chat] use-session event received', sessionId);
       sessionIdRef.current = sessionId;
       setMessages([]);
       setOpen(true);
@@ -205,20 +223,10 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
       if (userId) {
         try {
           const hist = await fetchDeepTopicHistory(sessionId, userId, gemId);
-          console.log('[chat] history loaded entries', hist.length, 'for', sessionId);
-          const ordered = hist;
-          setMessages(ordered.map(h => ({
-            id: h.id,
-            question: h.question,
-            answer: h.answer,
-            followUps: h.followUps,
-            origin: 'custom',
-            loading: false,
-            element: h.element || undefined,
-            historyId: h.id,
-            createdAt: (h as any).createdAt instanceof Date ? (h as any).createdAt : new Date((h as any).createdAt?.seconds ? (h as any).createdAt.seconds*1000 : Date.now())
-          })));
+          const ordered = hist.map(h => normalizeHistoryEntry(h));
+          setMessages(ordered);
           setFirstQuestionSet(ordered.length > 0);
+          setHasExistingHistory(ordered.length > 0);
         } catch(e) { /* ignore */ }
       }
     };
@@ -226,11 +234,9 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
     const newSessionHandler = async (ev: Event) => {
       const detail = (ev as CustomEvent).detail || {};
       const questions: SectionQuestionData[] = detail.questions || [];
-
       sessionIdRef.current = '';
       await ensureSession();
       setMessages([]);
-
       if (questions.length > 0 && questions[0]?.element?.name === 'general') {
         setBaseSuggestions(questions.filter(q => q.element?.name === 'general'));
         setDynamicSuggestions([]);
@@ -238,7 +244,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
         setDynamicSuggestions(questions.filter(q => q.element?.name !== 'general'));
       }
       setHideInitialSuggestions(false);
-
+      setHasExistingHistory(false);
       setOpen(true);
       setTimeout(() => {
         const input = document.getElementById('curiow-chat-input');
@@ -285,6 +291,22 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
     }
   }, [autoCustomQuestionText]);
 
+  // Carica history se la chat viene aperta e non abbiamo ancora messaggi ma esiste sessione
+  useEffect(() => {
+    const loadOnOpen = async () => {
+      if (open && messages.length === 0 && sessionIdRef.current && userId) {
+        try {
+          const hist = await fetchDeepTopicHistory(sessionIdRef.current, userId, gemId);
+          if (hist.length > 0) {
+            setMessages(hist.map(h => normalizeHistoryEntry(h)));
+            setHasExistingHistory(true);
+          }
+        } catch(e) { /* ignore */ }
+      }
+    };
+    loadOnOpen();
+  }, [open, messages.length, userId, gemId]);
+
   // Renderizza i suggerimenti dinamici (esclusi i generali)
   const renderDynamicSuggestions = () => {
     if (dynamicSuggestions.length === 0) return null;
@@ -306,6 +328,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   // Renderizza i suggerimenti di base (solo generali)
   const renderBaseSuggestions = () => {
     if (baseSuggestions.length === 0) return null;
+    if (hasExistingHistory) return null; // nasconde generali se c'è history preesistente
     return (
       <div className="curiow-suggestions-group">
         <div className="curiow-suggestions-group-title">Domande generali</div>
