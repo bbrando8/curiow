@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { callCuriowApi } from '../services/apiService';
 import { SparklesIcon } from './icons';
+import { PaperAirplaneIcon } from './icons';
+import { createDeepTopicSession, touchDeepTopicSession, fetchDeepTopicHistory } from '../services/firestoreService';
+import './SectionQuestionsChat.css'; // aggiunto
 
 export interface SectionQuestionData {
   id: string;
@@ -18,9 +21,10 @@ interface SectionQuestionsChatProps {
   hideTrigger?: boolean;
   gemTitle?: string;
   gemDescription?: string; // nuovo: per body description
+  userId?: string; // nuovo per creare sessione su Firestore
 }
 
-interface ChatMessage { id: string; question: string; answer?: string; loading: boolean; error?: string; origin: 'suggested' | 'custom'; element?: { name: string; index?: number; title?: string|null; test?: string|null }; followUps?: string[]; }
+interface ChatMessage { id: string; question: string; answer?: string; loading: boolean; error?: string; origin: 'suggested' | 'custom'; element?: { name: string; index?: number; title?: string|null; test?: string|null }; followUps?: string[]; historyId?: string; createdAt?: Date; }
 
 // Utility: sessionId giornaliero persistente
 const getDailySessionId = (): string => {
@@ -41,58 +45,44 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   questions,
   autoQuestionId,
   autoCustomQuestionText,
+  hideTrigger,
   gemTitle,
-  gemDescription
+  gemDescription,
+  userId
 }) => {
-  const [open, setOpen] = useState(false); // start chiusa
+  const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [customInput, setCustomInput] = useState('');
-  const [dynamicSuggestions, setDynamicSuggestions] = useState<SectionQuestionData[]>([]); // suggerimenti contestuali (sezione)
-  const [baseSuggestions, setBaseSuggestions] = useState<SectionQuestionData[]>(questions);
+  const [dynamicSuggestions, setDynamicSuggestions] = useState<SectionQuestionData[]>([]);
+  const [baseSuggestions, setBaseSuggestions] = useState<SectionQuestionData[]>([]);
+  const [sectionBaseSuggestions, setSectionBaseSuggestions] = useState<SectionQuestionData[]>([]);
+  const [hideInitialSuggestions, setHideInitialSuggestions] = useState(false);
+  const [sessionCreated, setSessionCreated] = useState(false);
+  const [firstQuestionSet, setFirstQuestionSet] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const autoFiredRef = useRef<string | null>(null);
-  const sessionIdRef = useRef<string>(getDailySessionId());
+  const sessionIdRef = useRef<string>('');
+  const messagesRef = useRef<ChatMessage[]>([]);
 
-  // Aggiorna suggerimenti base se cambiano le props
-  useEffect(()=>{ setBaseSuggestions(questions); },[questions]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  // Scroll verso il fondo quando nuovi messaggi
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  const ensureSession = async (forcedId?: string) => {
+    const makeId = () => (forcedId ? forcedId : (crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)));
+    if (!sessionIdRef.current || forcedId) {
+      sessionIdRef.current = makeId();
+      console.log('[chat][ensureSession] sessionId set', sessionIdRef.current, { forcedId });
+      window.dispatchEvent(new CustomEvent('curiow-chat-current-session', { detail: { sessionId: sessionIdRef.current } }));
+    } else {
+      console.log('[chat][ensureSession] reuse existing sessionId', sessionIdRef.current);
+    }
+  };
 
-  // Ascolta eventi globali di apertura dal resto dell'app
-  useEffect(() => {
-    const handler = (ev: Event) => {
-      const detail = (ev as CustomEvent).detail || {};
-      const sug: SectionQuestionData[] = detail.questions || [];
-      setDynamicSuggestions(sug);
-      setOpen(true);
-      // focus input
-      setTimeout(()=>{
-        const input = document.getElementById('curiow-chat-input');
-        (input as HTMLInputElement | null)?.focus();
-      }, 50);
-    };
-    window.addEventListener('curiow-chat-open', handler as EventListener);
-    return () => window.removeEventListener('curiow-chat-open', handler as EventListener);
-  }, []);
-
-  // Aggiorna sessionId se cambia giorno (poll semplice ogni ora)
-  useEffect(() => {
-    const interval = setInterval(()=>{
-      const current = sessionIdRef.current.split(':')[0];
-      const today = new Date().toISOString().slice(0,10);
-      if (!sessionIdRef.current.includes(today)) {
-        sessionIdRef.current = getDailySessionId();
-      }
-    }, 1000 * 60 * 60);
-    return () => clearInterval(interval);
-  }, []);
-
-  const buildBody = (elementCtx?: { name: string; index?: number; title?: string|null; test?: string|null }) => {
+  const buildBody = (testo: string, elementCtx?: { name: string; index?: number; title?: string|null; test?: string|null }) => {
     return {
       apitype: 'deep-question',
       gemId,
       description: gemDescription || '',
+      questionText: testo,
       element: {
         name: elementCtx?.name || elementName,
         title: (elementCtx?.title ?? null) || null,
@@ -104,138 +94,331 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
 
   const callApi = async (id: string, testo: string, origin: 'suggested'|'custom', elementCtx?: { name: string; index?: number; title?: string|null; test?: string|null }) => {
     try {
-      const body = buildBody(elementCtx);
+      await ensureSession();
+      const body = buildBody(testo, elementCtx);
       const resp = await callCuriowApi(body);
       const answer = resp.response || resp.answer || resp.result || resp.text || JSON.stringify(resp);
       const followUps: string[] | undefined = Array.isArray(resp.questions) ? resp.questions : undefined;
       setMessages(m => m.map(msg => msg.id === id ? { ...msg, loading: false, answer, followUps } : msg));
+      touchDeepTopicSession(sessionIdRef.current).then(() => {
+        window.dispatchEvent(new CustomEvent('curiow-chat-refresh-sessions', { detail: { sessionId: sessionIdRef.current } }));
+      });
+      // RIMOSSO: nessun salvataggio history - viene gestito altrove
     } catch (e: any) {
       const msg = e.message || 'Errore';
       setMessages(m => m.map(ms => ms.id === id ? { ...ms, loading: false, error: msg } : ms));
     }
   };
 
-  const ask = (testo: string, origin: 'suggested'|'custom', presetId?: string, elementCtx?: { name: string; index?: number; title?: string|null; test?: string|null }) => {
-    const id = (presetId || origin) + '-' + Date.now();
-    setMessages(m => [...m, { id, question: testo, origin, loading: true, element: elementCtx }]);
-    callApi(id, testo, origin, elementCtx);
-  };
-
-  const sendCustom = () => {
-    const t = customInput.trim();
-    if (!t) return;
-    ask(t, 'custom');
-    setCustomInput('');
-  };
-
-  // Auto ask opzionale al mount (solo se si apre programmaticamente)
-  useEffect(() => {
-    if (!open) return;
-    const token = `${autoQuestionId||''}|${autoCustomQuestionText||''}`;
-    if (!token || token === '|' || autoFiredRef.current === token) return;
-    autoFiredRef.current = token;
-    if (autoQuestionId) {
-      const q = baseSuggestions.find(q => q.id === autoQuestionId);
-      if (q) ask(q.testo, 'suggested', q.id, q.element);
-    } else if (autoCustomQuestionText) {
-      ask(autoCustomQuestionText, 'custom');
+  const ask = async (testo: string, origin: 'suggested'|'custom', presetId?: string, elementCtx?: { name: string; index?: number; title?: string|null; test?: string|null }) => {
+    await ensureSession();
+    if (!sessionCreated && userId) {
+      const sid = sessionIdRef.current;
+      console.log('[chat][ask] creating session if needed', sid);
+      if (sid) {
+        try {
+          const createdId = await createDeepTopicSession(sid, gemId, userId);
+          console.log('[chat][ask] session created', createdId);
+          setSessionCreated(true);
+          window.dispatchEvent(new CustomEvent('curiow-chat-refresh-sessions', { detail: { sessionId: createdId } }));
+        } catch(e) {
+          console.error('[chat][ask] error creating session', e);
+        }
+      }
     }
-  }, [open, autoQuestionId, autoCustomQuestionText, baseSuggestions]);
 
-  return (
-    <div className={`fixed inset-y-0 right-0 z-50 flex flex-col w-full sm:w-[400px] md:w-[460px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-2xl transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-indigo-600 to-violet-600 text-white">
-        <div className="flex items-center gap-2 overflow-hidden pr-4 flex-1 min-w-0">
-          <SparklesIcon className="w-5 h-5 flex-shrink-0" />
-          <h3 className="text-sm font-semibold tracking-wide truncate" title={gemTitle || 'Chat'}>
-            {gemTitle || 'Chat'}
-          </h3>
-        </div>
-        <button onClick={() => setOpen(o=>!o)} className="text-white/80 hover:text-white text-sm font-medium flex-shrink-0">
-          {open ? 'Chiudi' : 'Apri'}
-        </button>
-      </div>
-      <div className="flex-1 overflow-hidden flex flex-col">
-        {/* Suggerimenti dinamici sezione */}
-        {dynamicSuggestions.length > 0 && (
-          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Domande per la Sezione</p>
-            <div className="flex flex-wrap gap-2">
-              {dynamicSuggestions.map(q => (
-                <button key={q.id} onClick={() => ask(q.testo,'suggested', q.id, q.element)} className="px-2.5 py-1.5 rounded-full text-xs bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-700 dark:text-indigo-300 border border-indigo-400/40 dark:border-indigo-500/30 transition">{q.testo}</button>
-              ))}
-              <button onClick={()=> setDynamicSuggestions([])} className="px-2 py-1.5 text-[10px] uppercase tracking-wide bg-slate-200/70 dark:bg-slate-700/60 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-md text-slate-600 dark:text-slate-300">Nascondi</button>
-            </div>
-          </div>
-        )}
-        {/* Suggerimenti generali */}
-        {baseSuggestions.length > 0 && (
-          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Domande Generali</p>
-            <div className="flex flex-wrap gap-2">
-              {baseSuggestions.map(q => (
-                <button key={q.id} onClick={() => ask(q.testo,'suggested', q.id, q.element)} className="px-2.5 py-1.5 rounded-full text-xs bg-violet-600/10 hover:bg-violet-600/20 text-violet-700 dark:text-violet-300 border border-violet-400/40 dark:border-violet-500/30 transition">{q.testo}</button>
-              ))}
-            </div>
-          </div>
-        )}
-        {/* Conversazione */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 custom-scrollbar">
-          {messages.length === 0 && (
-            <p className="text-xs text-slate-500 dark:text-slate-400">Seleziona una domanda suggerita oppure scrivine una tu.</p>
-          )}
-          {messages.map(m => (
-            <div key={m.id} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-white dark:bg-slate-800 shadow-sm">
-              <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{m.question}</p>
-              {m.loading && (
-                <div className="mt-2 flex items-center gap-2 text-[12px] text-slate-500">
-                  <SparklesIcon className="w-4 h-4 animate-pulse text-indigo-400" />
-                  <span>Generazione risposta...</span>
-                </div>
-              )}
-              {m.error && <p className="mt-2 text-[12px] text-red-500">{m.error}</p>}
-              {m.answer && <p className="mt-2 text-[12px] leading-relaxed whitespace-pre-wrap text-slate-700 dark:text-slate-300">{m.answer}</p>}
-              {m.followUps && m.followUps.length>0 && (
-                <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Nuove domande suggerite</p>
-                  <div className="flex flex-wrap gap-2">
-                    {m.followUps.map((fu, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => ask(fu, 'suggested')}
-                        className="px-2.5 py-1 rounded-full bg-indigo-600/10 hover:bg-indigo-600/20 text-[11px] text-indigo-700 dark:text-indigo-300 border border-indigo-400/30 dark:border-indigo-500/30 transition"
-                      >{fu}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {m.element && (
-                <p className="mt-2 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Contesto: {m.element.title || m.element.name}{typeof m.element.index==='number' ? ' #' + (m.element.index+1) : ''}</p>
-              )}
+    const id = crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+    const newMsg: ChatMessage = {
+      id,
+      question: testo,
+      loading: true,
+      origin,
+      element: elementCtx,
+      createdAt: new Date()
+    };
+
+    setMessages(m => [...m, newMsg]);
+    setHideInitialSuggestions(true);
+
+    // RIMOSSO: nessuna creazione di history entry - il salvataggio viene gestito altrove
+    await callApi(id, testo, origin, elementCtx);
+  };
+
+  const showFollowUp = (followUp: string) => {
+    ask(followUp, 'custom');
+  };
+
+  // Genera solo l'ID sessione quando cambia la gemma o l'utente
+  useEffect(() => {
+    sessionIdRef.current = '';
+    setSessionCreated(false);
+    setFirstQuestionSet(false);
+    if (userId) {
+      ensureSession();
+    }
+  }, [userId, gemId]);
+
+  // Scroll verso il fondo quando nuovi messaggi
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Ascolta eventi globali di apertura dal resto dell'app
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent).detail || {};
+      const sug: SectionQuestionData[] = (detail.questions || []).filter(q => q.element?.name !== 'general');
+      setDynamicSuggestions(sug);
+      setOpen(true);
+      setTimeout(() => {
+        const input = document.getElementById('curiow-chat-input');
+        (input as HTMLInputElement | null)?.focus();
+      }, 50);
+    };
+    window.addEventListener('curiow-chat-open', handler as EventListener);
+    return () => window.removeEventListener('curiow-chat-open', handler as EventListener);
+  }, []);
+
+  // Aggiorna sessionId se cambia giorno
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const current = sessionIdRef.current.split(':')[0];
+      const today = new Date().toISOString().slice(0,10);
+      if (!sessionIdRef.current.includes(today)) {
+        sessionIdRef.current = getDailySessionId();
+      }
+    }, 1000 * 60 * 60);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Listener per cambiare sessione
+  useEffect(() => {
+    const useSessionHandler = async (ev: Event) => {
+      const { sessionId } = (ev as CustomEvent).detail || {};
+      if (!sessionId) return;
+      console.log('[chat] use-session event received', sessionId);
+      sessionIdRef.current = sessionId;
+      setMessages([]);
+      setOpen(true);
+      window.dispatchEvent(new CustomEvent('curiow-chat-current-session', { detail: { sessionId } }));
+
+      if (userId) {
+        try {
+          const hist = await fetchDeepTopicHistory(sessionId, userId, gemId);
+          console.log('[chat] history loaded entries', hist.length, 'for', sessionId);
+          const ordered = hist;
+          setMessages(ordered.map(h => ({
+            id: h.id,
+            question: h.question,
+            answer: h.answer,
+            followUps: h.followUps,
+            origin: 'custom',
+            loading: false,
+            element: h.element || undefined,
+            historyId: h.id,
+            createdAt: (h as any).createdAt instanceof Date ? (h as any).createdAt : new Date((h as any).createdAt?.seconds ? (h as any).createdAt.seconds*1000 : Date.now())
+          })));
+          setFirstQuestionSet(ordered.length > 0);
+        } catch(e) { /* ignore */ }
+      }
+    };
+
+    const newSessionHandler = async (ev: Event) => {
+      const detail = (ev as CustomEvent).detail || {};
+      const questions: SectionQuestionData[] = detail.questions || [];
+
+      sessionIdRef.current = '';
+      await ensureSession();
+      setMessages([]);
+
+      if (questions.length > 0 && questions[0]?.element?.name === 'general') {
+        setBaseSuggestions(questions.filter(q => q.element?.name === 'general'));
+        setDynamicSuggestions([]);
+      } else {
+        setDynamicSuggestions(questions.filter(q => q.element?.name !== 'general'));
+      }
+      setHideInitialSuggestions(false);
+
+      setOpen(true);
+      setTimeout(() => {
+        const input = document.getElementById('curiow-chat-input');
+        (input as HTMLInputElement | null)?.focus();
+      }, 50);
+    };
+
+    window.addEventListener('curiow-chat-use-session', useSessionHandler as EventListener);
+    window.addEventListener('curiow-chat-new-session', newSessionHandler);
+    return () => {
+      window.removeEventListener('curiow-chat-use-session', useSessionHandler as EventListener);
+      window.removeEventListener('curiow-chat-new-session', newSessionHandler);
+    };
+  }, [userId, gemId]);
+
+  // Split tra generali e sezione dalle props originarie
+  useEffect(() => {
+    const generals = questions.filter(q => q.element?.name === 'general');
+    const sectionQs = questions.filter(q => q.element?.name !== 'general');
+    setBaseSuggestions(generals);
+    setSectionBaseSuggestions(sectionQs);
+  }, [questions]);
+
+  // Auto-fire domanda se specificata
+  useEffect(() => {
+    if (autoQuestionId && autoQuestionId !== autoFiredRef.current) {
+      const q = questions.find(q => q.id === autoQuestionId);
+      if (q) {
+        console.log('[chat] auto-firing question', q.testo);
+        ask(q.testo, 'suggested', q.id, q.element);
+        autoFiredRef.current = autoQuestionId;
+        setOpen(true);
+      }
+    }
+  }, [autoQuestionId, questions]);
+
+  // Auto-fire custom text se specificato
+  useEffect(() => {
+    if (autoCustomQuestionText && autoCustomQuestionText !== autoFiredRef.current) {
+      console.log('[chat] auto-firing custom text', autoCustomQuestionText);
+      ask(autoCustomQuestionText, 'custom');
+      autoFiredRef.current = autoCustomQuestionText;
+      setOpen(true);
+    }
+  }, [autoCustomQuestionText]);
+
+  // Renderizza i suggerimenti dinamici (esclusi i generali)
+  const renderDynamicSuggestions = () => {
+    if (dynamicSuggestions.length === 0) return null;
+    return (
+      <div className="curiow-suggestions-group">
+        <div className="curiow-suggestions-group-title">Suggerite per questa sessione</div>
+        <div className="curiow-suggestions-container">
+          {dynamicSuggestions.map((q, idx) => (
+            <div key={q.id} className="curiow-suggestion" onClick={() => ask(q.testo, 'suggested', q.id, q.element)}>
+              <div className="curiow-suggestion-index">{idx + 1}</div>
+              <div className="curiow-suggestion-text">{q.testo}</div>
             </div>
           ))}
-          <div ref={messagesEndRef} />
-        </div>
-        {/* Input */}
-        <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-          <div className="flex gap-2">
-            <input
-              id="curiow-chat-input"
-              type="text"
-              value={customInput}
-              onChange={e => setCustomInput(e.target.value)}
-              placeholder="Scrivi una domanda..."
-              className="flex-1 px-3 py-2 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              onKeyDown={e => { if (e.key === 'Enter') sendCustom(); }}
-            />
-            <button
-              onClick={sendCustom}
-              disabled={!customInput.trim()}
-              className="px-4 py-2 rounded-md bg-indigo-600 disabled:opacity-40 text-white text-sm font-medium hover:bg-indigo-700 transition"
-            >Invia</button>
-          </div>
         </div>
       </div>
+    );
+  };
+
+  // Renderizza i suggerimenti di base (solo generali)
+  const renderBaseSuggestions = () => {
+    if (baseSuggestions.length === 0) return null;
+    return (
+      <div className="curiow-suggestions-group">
+        <div className="curiow-suggestions-group-title">Domande generali</div>
+        <div className="curiow-suggestions-container">
+          {baseSuggestions.map((q, idx) => (
+            <div key={q.id} className="curiow-suggestion" onClick={() => ask(q.testo, 'suggested', q.id, q.element)}>
+              <div className="curiow-suggestion-index">{idx + 1}</div>
+              <div className="curiow-suggestion-text">{q.testo}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Renderizza i suggerimenti di sezione (dalle props)
+  const renderSectionSuggestions = () => {
+    if (sectionBaseSuggestions.length === 0) return null;
+    return (
+      <div className="curiow-suggestions-group">
+        <div className="curiow-suggestions-group-title">Domande per questa sezione</div>
+        <div className="curiow-suggestions-container">
+          {sectionBaseSuggestions.map((q, idx) => (
+            <div key={q.id} className="curiow-suggestion" onClick={() => ask(q.testo, 'suggested', q.id, q.element)}>
+              <div className="curiow-suggestion-index">{idx + 1}</div>
+              <div className="curiow-suggestion-text">{q.testo}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className={`curiow-section-questions-chat ${open ? 'open' : ''}`}>
+      {!hideTrigger && (
+        <div className="curiow-trigger" onClick={() => setOpen(true)}>
+          <SparklesIcon />
+          <span>Fai una domanda</span>
+        </div>
+      )}
+
+      {open && (
+        <div className="curiow-overlay" onClick={() => setOpen(false)}>
+          <div className="curiow-chat-container" onClick={e => e.stopPropagation()}>
+            <div className="curiow-header">
+              <div className="curiow-title">{gemTitle || 'Chat'}</div>
+              <button className="curiow-close" onClick={() => setOpen(false)}>×</button>
+            </div>
+
+            <div className="curiow-content">
+              {!hideInitialSuggestions && (
+                <div className="curiow-top-suggestions">
+                  {renderDynamicSuggestions()}
+                  {renderSectionSuggestions()}
+                  {renderBaseSuggestions()}
+                </div>
+              )}
+              <div className="curiow-messages">
+                {messages.map(msg => (
+                  <div key={msg.id} className={`curiow-message ${msg.loading ? 'loading' : ''}`}>
+                    <div className="curiow-message-question">{msg.question}</div>
+                    {msg.answer && (
+                      <div className="curiow-message-answer">
+                        {msg.answer}
+                        {msg.followUps && msg.followUps.length > 0 && (
+                          <div className="curiow-followups">
+                            <div className="curiow-followups-title">Domande correlate:</div>
+                            {msg.followUps.map((fu, idx) => (
+                              <div key={idx} className="curiow-followup" onClick={() => showFollowUp(fu)}>
+                                {fu}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {msg.loading && <div className="curiow-message-loading">Pensando...</div>}
+                    {msg.error && <div className="curiow-message-error">{msg.error}</div>}
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+
+              <div className="curiow-input-container">
+                <input
+                  id="curiow-chat-input"
+                  className="curiow-input"
+                  type="text"
+                  placeholder="Fai una domanda..."
+                  value={customInput}
+                  onChange={e => setCustomInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && customInput.trim() !== '') {
+                      ask(customInput.trim(), 'custom');
+                      setCustomInput('');
+                    }
+                  }}
+                />
+                <button className="curiow-send" type="button" aria-label="Invia domanda" disabled={customInput.trim()===''} onClick={() => {
+                  if (customInput.trim() !== '') {
+                    ask(customInput.trim(), 'custom');
+                    setCustomInput('');
+                  }
+                }}>
+                  <PaperAirplaneIcon className="curiow-send-icon" />
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

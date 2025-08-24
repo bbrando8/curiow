@@ -123,3 +123,9 @@ export const MailIcon: React.FC<{ className?: string }> = ({ className }) => (
 export const CopyIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M8.25 3A2.25 2.25 0 0 0 6 5.25v9A2.25 2.25 0 0 0 8.25 16.5h7.5A2.25 2.25 0 0 0 18 14.25v-9A2.25 2.25 0 0 0 15.75 3h-7.5Zm-3 3h-.75A2.25 2.25 0 0 0 2.25 8.25v9A2.25 2.25 0 0 0 4.5 19.5h9a2.25 2.25 0 0 0 2.25-2.25v-.75h-.75a2.25 2.25 0 0 1-2.25-2.25V8.25A2.25 2.25 0 0 0 10.5 6h-5.25Z"/></svg>
 );
+
+export const MagnifyingGlassIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" />
+  </svg>
+);

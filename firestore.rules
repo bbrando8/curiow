@@ -37,6 +37,35 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
+    // Regole per le sessioni di approfondimento
+    match /deep_topic/{sessionId} {
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      allow get, list: if request.auth != null &&
+        resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null &&
+        resource.data.userId == request.auth.uid;
+    }
+
+    // Regole per le domande generate dall'AI
+    match /questions/{questionId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Regole per i feedback degli utenti
+    match /feedback_tester/{feedbackId} {
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      allow read, write: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow read: if request.auth != null &&
+        resource.data.userId == request.auth.uid;
+    }
+
     // ===== REGOLE PER LE NUOVE LISTE =====
 
     // Regole per le liste
@@ -65,6 +94,15 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/lists/$(resource.data.listId)) &&
         get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.isPublic == true;
     }
+
+    // Regole per la cronologia delle chat di approfondimento
+    match /deep_topic_history/{msgId} {
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      allow get, list: if request.auth != null &&
+        resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null &&
+        resource.data.userId == request.auth.uid;
+    }
   }
 }
-

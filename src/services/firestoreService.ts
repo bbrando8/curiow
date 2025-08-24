@@ -601,3 +601,165 @@ export const fetchGemsPaginated = async (lastDoc?: QueryDocumentSnapshot<Documen
     return { gems: [] };
   }
 };
+
+// --- Deep Topic Sessions ---
+export interface DeepTopicSession {
+  id: string; // sessionId usato come id documento
+  sessionId: string;
+  gemId: string;
+  userId: string;
+  createdAt: Date;
+  modifiedAt: Date;
+  // Rimossi firstQuestion e firstHistoryId - il titolo viene ottenuto dalla history
+}
+
+export interface DeepTopicHistoryEntry {
+  id: string;
+  sessionId: string;
+  gemId: string;
+  userId: string;
+  question: string;
+  answer?: string;
+  followUps?: string[];
+  element?: any;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const createDeepTopicSession = async (sessionId: string, gemId: string, userId: string): Promise<string> => {
+  if (!userId) return sessionId;
+  let currentId = sessionId;
+  let ref = doc(db, 'deep_topic', currentId);
+  const baseData = {
+    sessionId: currentId,
+    gemId,
+    userId,
+    createdAt: new Date(), // se esiste già verrà ignorato dal merge manuale sotto
+    modifiedAt: new Date()
+  } as any;
+  try {
+    try {
+      // Primo tentativo: crea se non esiste, aggiorna modifiedAt se esiste (mantieni createdAt precedente)
+      await setDoc(ref, baseData, { merge: true });
+      // Se il doc esisteva, non sovrascrivere createdAt: Firestore mantiene il valore precedente
+      return currentId;
+    } catch (err: any) {
+      // Possibile collisione di sessionId con doc di altro utente → permission-denied
+      const permDenied = err?.code === 'permission-denied';
+      if (!permDenied) throw err;
+      currentId = sessionId + '-' + Math.random().toString(36).slice(2,8);
+      ref = doc(db, 'deep_topic', currentId);
+      await setDoc(ref, { ...baseData, sessionId: currentId });
+      return currentId;
+    }
+  } catch(e){
+    console.error('[firestore] createDeepTopicSession fatal', e);
+    throw e;
+  }
+};
+
+export const fetchDeepTopicHistory = async (sessionId: string, userId: string, gemId: string): Promise<DeepTopicHistoryEntry[]> => {
+  console.log('[deep_topic][history] fetchDeepTopicHistory start', { sessionId, userId, gemId });
+  if(!sessionId || !userId || !gemId) {
+    console.log('[deep_topic][history] missing required params, return empty');
+    return [];
+  }
+
+  const colRef = collection(db, 'deep_topic_history');
+
+  try {
+    // Query con tutti e tre i filtri richiesti
+    const q = query(
+      colRef,
+      where('gemId', '==', gemId),
+      where('sessionId', '==', sessionId),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'asc')
+    );
+
+    const snap = await getDocs(q);
+    console.log('[deep_topic][history] query found', snap.docs.length, 'entries');
+
+    const rows = snap.docs.map(d => ({
+      id: d.id,
+      ...(d.data() as any)
+    })) as DeepTopicHistoryEntry[];
+
+    console.log('[deep_topic][history] final result:', rows.length, 'entries');
+    return rows;
+
+  } catch(e) {
+    console.error('[deep_topic][history] query error', e);
+    return [];
+  }
+};
+
+export const deleteDeepTopicSession = async (sessionId: string, userId: string): Promise<void> => {
+  if(!sessionId || !userId) return;
+  // elimina history
+  const colRef = collection(db, 'deep_topic_history');
+  const qy = query(colRef, where('sessionId','==', sessionId), where('userId','==', userId));
+  const snap = await getDocs(qy);
+  const batch = writeBatch(db);
+  snap.docs.forEach(d => batch.delete(d.ref));
+  batch.delete(doc(db,'deep_topic', sessionId));
+  await batch.commit();
+};
+
+export const touchDeepTopicSession = async (sessionId: string): Promise<void> => {
+  if (!sessionId) return;
+  const ref = doc(db, 'deep_topic', sessionId);
+  try { await updateDoc(ref, { modifiedAt: new Date() }); } catch(e) { /* ignore */ }
+};
+
+export const fetchDeepTopicSessions = async (gemId: string, userId: string, max: number = 50): Promise<DeepTopicSession[]> => {
+  console.log('[deep_topic][sessions] fetchDeepTopicSessions start', { gemId, userId, max });
+  if (!userId) { console.log('[deep_topic][sessions] no userId -> []'); return [];}
+  const colRef = collection(db, 'deep_topic');
+  const qy = query(colRef, where('gemId', '==', gemId), where('userId','==', userId), orderBy('modifiedAt','desc'), limit(max));
+  let snap;
+  try { snap = await getDocs(qy); } catch(e){ console.warn('[deep_topic][sessions] query error', e); return []; }
+  const sessions = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as DeepTopicSession[];
+  console.log('[deep_topic][sessions] sessions loaded:', sessions.length);
+  return sessions;
+};
+
+// Funzione per ottenere il titolo di una sessione dalla prima domanda in history
+export const getSessionTitle = async (sessionId: string, userId: string, gemId: string): Promise<string> => {
+  console.log('[deep_topic][title] getSessionTitle start', { sessionId, userId, gemId });
+
+  if (!sessionId || !userId || !gemId) {
+    console.log('[deep_topic][title] missing required params');
+    return 'Conversazione';
+  }
+
+  try {
+    const colRef = collection(db, 'deep_topic_history');
+    const q = query(
+      colRef,
+      where('gemId', '==', gemId),
+      where('sessionId', '==', sessionId),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'asc'),
+      limit(1)
+    );
+
+    const snap = await getDocs(q);
+
+    if (!snap.empty) {
+      const firstEntry = snap.docs[0].data();
+      const question = firstEntry.question || '';
+      console.log('[deep_topic][title] found first question:', question.substring(0, 50) + '...');
+
+      // Tronca la domanda se troppo lunga per il titolo
+      return question.length > 60 ? question.substring(0, 60) + '...' : question;
+    }
+
+    console.log('[deep_topic][title] no history found, using default');
+    return 'Conversazione';
+
+  } catch (e) {
+    console.error('[deep_topic][title] error getting session title', e);
+    return 'Conversazione';
+  }
+};

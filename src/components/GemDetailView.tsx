@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Gem, UserQuestion, User, Filter, Channel } from '../types';
-import { ChevronLeftIcon, HeartIcon, ShareIcon, PaperAirplaneIcon, SparklesIcon, PlusCircleIcon, TagIcon, LinkIcon, ChevronDownIcon, LightBulbIcon, BookOpenIcon, FacebookIcon, InstagramIcon, WhatsappIcon, MailIcon, CopyIcon } from './icons';
+import { ChevronLeftIcon, HeartIcon, ShareIcon, PaperAirplaneIcon, SparklesIcon, PlusCircleIcon, TagIcon, LinkIcon, ChevronDownIcon, LightBulbIcon, BookOpenIcon, FacebookIcon, InstagramIcon, WhatsappIcon, MailIcon, CopyIcon, MagnifyingGlassIcon } from './icons';
 import { trackEvent, getIdToken } from '../services/firebase';
 import { usePageMeta } from '../hooks/usePageMeta';
 import Header from './Header';
-import { fetchGeneratedQuestionsByGem } from '../services/firestoreService';
+import { fetchGeneratedQuestionsByGem, fetchDeepTopicSessions, DeepTopicSession, deleteDeepTopicSession } from '../services/firestoreService';
 import SectionQuestionsChat from './SectionQuestionsChat';
 
 interface GemDetailViewProps {
@@ -23,6 +23,7 @@ interface GemDetailViewProps {
   selectedFilter?: Filter;
   onSelectFilter?: (filter: Filter) => void;
   channels?: Channel[];
+  currentUserId?: string; // nuovo per sessioni approfondimenti
 }
 
 const UserQuestionItem: React.FC<{ userQuestion: UserQuestion }> = ({ userQuestion }) => (
@@ -41,19 +42,22 @@ const UserQuestionItem: React.FC<{ userQuestion: UserQuestion }> = ({ userQuesti
     </div>
 );
 
-const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, onSaveRequest, onRemoveRequest, onAddUserQuestion, onTagSelect, isLoggedIn, user, onLogin, onLogout, onNavigate, selectedFilter, onSelectFilter, channels }) => {
+const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, onSaveRequest, onRemoveRequest, onAddUserQuestion, onTagSelect, isLoggedIn, user, onLogin, onLogout, onNavigate, selectedFilter, onSelectFilter, channels, currentUserId }) => {
   const [userQuestion, setUserQuestion] = useState('');
   const [isSourcesOpen, setIsSourcesOpen] = useState(false);
   const [hasAutoScrolled, setHasAutoScrolled] = useState(false);
   const imgRef = useRef<HTMLImageElement | null>(null);
   // nuovo stato per tab
-  const [activeTab, setActiveTab] = useState<'tips' | 'saggio'>('tips');
+  const [activeTab, setActiveTab] = useState<'tips' | 'saggio' | 'approfondimenti'>('tips');
   // refs per animazione cross-fade
   const tipsRef = useRef<HTMLDivElement | null>(null);
   const saggioRef = useRef<HTMLDivElement | null>(null);
   const [contentHeight, setContentHeight] = useState<number>(0);
   const [showShareBar, setShowShareBar] = useState(false);
   const [generatedQuestions, setGeneratedQuestions] = useState<(any)[]>([]);
+  const [deepSessions, setDeepSessions] = useState<DeepTopicSession[]>([]);
+  const [currentChatSessionId, setCurrentChatSessionId] = useState<string | null>(null);
+  const [loadingSessions, setLoadingSessions] = useState(false);
   // RIMOSSI stati vecchia chat generale
   // const [generalChatOpen, setGeneralChatOpen] = useState(false);
   // const [generalAutoQId, setGeneralAutoQId] = useState<string | undefined>(undefined);
@@ -198,7 +202,10 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
         }
         return { ...q, element: { name: section } };
       });
-      window.dispatchEvent(new CustomEvent('curiow-chat-open', { detail: { questions: enriched } }));
+      // Aggiungi sempre le domande generali alle domande di sezione
+      const generalEnriched = generalQuestions.map(q => ({...q, element: { name: 'general', title: null, test: null }}));
+      const allQuestions = [...enriched, ...generalEnriched];
+      window.dispatchEvent(new CustomEvent('curiow-chat-open', { detail: { questions: allQuestions } }));
     };
     return (
       <div className="mt-6 space-y-6">
@@ -261,7 +268,10 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
           default: return { ...q, element: { name: section } };
         }
       });
-      window.dispatchEvent(new CustomEvent('curiow-chat-open', { detail: { questions: enriched } }));
+      // Aggiungi sempre le domande generali alle domande di sezione
+      const generalEnriched = generalQuestions.map(q => ({...q, element: { name: 'general', title: null, test: null }}));
+      const allQuestions = [...enriched, ...generalEnriched];
+      window.dispatchEvent(new CustomEvent('curiow-chat-open', { detail: { questions: allQuestions } }));
     };
     return (
       <div className="mt-6 space-y-6">
@@ -512,6 +522,22 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
     }
   }, [user?.role, gem.id]);
 
+  const refreshSessions = async () => {
+    if(!currentUserId) return;
+    setLoadingSessions(true);
+    try { const data = await fetchDeepTopicSessions(gem.id, currentUserId, 100); setDeepSessions(data); } catch(e){ console.warn('Err fetch sessions', e);} finally { setLoadingSessions(false);} };
+  useEffect(()=>{ refreshSessions(); }, [currentUserId, gem.id]);
+  useEffect(()=>{
+    const handler = () => refreshSessions();
+    window.addEventListener('curiow-chat-refresh-sessions', handler);
+    return () => window.removeEventListener('curiow-chat-refresh-sessions', handler);
+  }, [currentUserId, gem.id]);
+  useEffect(()=>{
+    const handler = (ev: any) => { setCurrentChatSessionId(ev.detail?.sessionId || null); };
+    window.addEventListener('curiow-chat-current-session', handler);
+    return ()=> window.removeEventListener('curiow-chat-current-session', handler);
+  },[]);
+
   return (
     <>
       <div className="max-w-2xl mx-auto">
@@ -615,6 +641,15 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                       <BookOpenIcon className="w-5 h-5" />
                       {activeTab==='saggio' && <span className="absolute -bottom-1 h-1 w-4 rounded-full bg-white/70 dark:bg-white/40"/>}
                     </button>
+                    <button
+                      onClick={() => setActiveTab('approfondimenti')}
+                      aria-pressed={activeTab==='approfondimenti'}
+                      title="Vista Approfondimenti (sessioni)"
+                      className={`relative flex items-center justify-center w-9 h-9 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:focus:ring-indigo-500 group ${activeTab==='approfondimenti' ? 'bg-gradient-to-tr from-indigo-500 to-violet-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300'}`}
+                    >
+                      <MagnifyingGlassIcon className="w-5 h-5" />
+                      {activeTab==='approfondimenti' && <span className="absolute -bottom-1 h-1 w-4 rounded-full bg-white/70 dark:bg-white/40"/>}
+                    </button>
                   </div>
                 </div>
 
@@ -660,6 +695,50 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                       )
                     ) : (
                       <p className="italic text-slate-500 dark:text-slate-400">Nessun testo disponibile.</p>
+                    )}
+                  </div>
+                  {/* Pannello Approfondimenti */}
+                  <div className={`absolute inset-0 transition-opacity duration-400 ease-in-out ${activeTab==='approfondimenti' ? 'opacity-100' : 'opacity-0 pointer-events-none'} overflow-auto px-1 py-1`}>
+                    {!isLoggedIn && <p className="text-sm text-slate-500 dark:text-slate-400">Accedi per vedere le tue sessioni di approfondimento.</p>}
+                    {isLoggedIn && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Sessioni Approfondimenti</h3>
+                          <div className="flex gap-2">
+                            <button onClick={()=>window.dispatchEvent(new CustomEvent('curiow-chat-new-session', {
+                              detail: { questions: generalQuestions.map(q => ({...q, element: { name: 'general', title: null, test: null }})) }
+                            }))} className="px-2 py-1 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700">Nuova</button>
+                            <button onClick={refreshSessions} className="px-2 py-1 text-xs rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600">Refresh</button>
+                          </div>
+                        </div>
+                        {loadingSessions && <p className="text-xs text-slate-500">Caricamento sessioni...</p>}
+                        {!loadingSessions && deepSessions.length===0 && <p className="text-xs text-slate-500">Nessuna sessione ancora. Crea una nuova conversazione nella chat a destra.</p>}
+                        <ul className="divide-y divide-slate-200 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+                          {deepSessions.map(s => {
+                            const modified = (s as any).modifiedAt?.seconds ? new Date((s as any).modifiedAt.seconds*1000) : (s.modifiedAt instanceof Date ? s.modifiedAt : new Date());
+                            const titleRaw = (s as any).firstQuestion || 'Sessione';
+                            const title = titleRaw.length > 80 ? titleRaw.slice(0,77)+'…' : titleRaw;
+                            const isActive = currentChatSessionId && (currentChatSessionId === (s.sessionId||s.id));
+                            return (
+                              <li key={s.id} className={`p-3 hover:bg-indigo-50 dark:hover:bg-slate-800 cursor-pointer flex items-start gap-3 group ${isActive ? 'bg-indigo-50 dark:bg-slate-800/60' : ''}`}
+                                  onClick={()=>window.dispatchEvent(new CustomEvent('curiow-chat-use-session',{ detail:{ sessionId: s.sessionId||s.id }}))}>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-slate-700 dark:text-slate-200 line-clamp-2" title={titleRaw}>{title}</p>
+                                  <p className="text-[10px] text-slate-500 dark:text-slate-400">Aggiornata: {modified.toLocaleString()}</p>
+                                </div>
+                                <div className="flex flex-col items-end gap-2">
+                                  <button
+                                    onClick={(e)=>{ e.stopPropagation(); if(window.confirm('Eliminare definitivamente questa chat?')) { deleteDeepTopicSession(s.sessionId||s.id, currentUserId! ).then(()=>{ if(currentChatSessionId === (s.sessionId||s.id)) { window.dispatchEvent(new CustomEvent('curiow-chat-new-session',{ detail:{ questions: [] }})); } refreshSessions(); }); } }}
+                                    className="opacity-0 group-hover:opacity-100 transition text-red-500 hover:text-red-600 text-[10px] font-semibold"
+                                  >Elimina</button>
+                                  <SparklesIcon className="w-4 h-4 text-indigo-500" />
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500">Le sessioni si aggiornano quando invii nuove domande.</p>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -717,6 +796,7 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
         questions={generalQuestions.map(q=>({...q, element:{ name: 'general', index:0, title: null, test: null }}))}
         gemTitle={gem.title}
         gemDescription={rawDescription || rawSummary || ''}
+        userId={currentUserId}
       />
     </>
   );

@@ -830,6 +830,7 @@ const App: React.FC = () => {
       selectedFilter={filter}
       onSelectFilter={setFilter}
       channels={channels}
+      currentUserId={firebaseUser?.uid}
     />;
   };
 
