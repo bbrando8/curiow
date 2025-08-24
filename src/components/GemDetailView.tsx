@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Gem, UserQuestion, User, Filter, Channel } from '../types';
-import { ChevronLeftIcon, HeartIcon, ShareIcon, PaperAirplaneIcon, SparklesIcon, PlusCircleIcon, TagIcon, LinkIcon, ChevronDownIcon, LightBulbIcon, BookOpenIcon, FacebookIcon, InstagramIcon, WhatsappIcon, MailIcon, CopyIcon, MagnifyingGlassIcon } from './icons';
+import { ChevronLeftIcon, HeartIcon, ShareIcon, PaperAirplaneIcon, SparklesIcon, PlusCircleIcon, TagIcon, LinkIcon, ChevronDownIcon, LightBulbIcon, BookOpenIcon, FacebookIcon, InstagramIcon, WhatsappIcon, MailIcon, CopyIcon, MagnifyingGlassIcon, TrashIcon } from './icons';
 import { trackEvent, getIdToken } from '../services/firebase';
 import { usePageMeta } from '../hooks/usePageMeta';
 import Header from './Header';
-import { fetchGeneratedQuestionsByGem, fetchDeepTopicSessions, DeepTopicSession, deleteDeepTopicSession } from '../services/firestoreService';
+import { fetchGeneratedQuestionsByGem, fetchDeepTopicSessions, DeepTopicSession, deleteDeepTopicSession, getSessionTitle } from '../services/firestoreService';
+import AdminConfirmationModal from './admin/AdminConfirmationModal';
 import SectionQuestionsChat from './SectionQuestionsChat';
 
 interface GemDetailViewProps {
@@ -58,6 +59,11 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   const [deepSessions, setDeepSessions] = useState<DeepTopicSession[]>([]);
   const [currentChatSessionId, setCurrentChatSessionId] = useState<string | null>(null);
   const [loadingSessions, setLoadingSessions] = useState(false);
+  const [sessionTitles, setSessionTitles] = useState<Record<string,string>>({});
+  const [pendingSessionsRefresh, setPendingSessionsRefresh] = useState(false);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false); // nuovo per evitare loop su 0 risultati
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<DeepTopicSession | null>(null);
   // RIMOSSI stati vecchia chat generale
   // const [generalChatOpen, setGeneralChatOpen] = useState(false);
   // const [generalAutoQId, setGeneralAutoQId] = useState<string | undefined>(undefined);
@@ -525,13 +531,34 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   const refreshSessions = async () => {
     if(!currentUserId) return;
     setLoadingSessions(true);
-    try { const data = await fetchDeepTopicSessions(gem.id, currentUserId, 100); setDeepSessions(data); } catch(e){ console.warn('Err fetch sessions', e);} finally { setLoadingSessions(false);} };
-  useEffect(()=>{ refreshSessions(); }, [currentUserId, gem.id]);
+    try {
+      const data = await fetchDeepTopicSessions(gem.id, currentUserId, 100);
+      setDeepSessions(data);
+      const entries = await Promise.all(
+        data.map(async s => {
+          try { const title = await getSessionTitle(s.sessionId || s.id, currentUserId, gem.id); return [s.sessionId || s.id, title] as [string,string]; } catch { return [s.sessionId || s.id, 'Sessione']; }
+        })
+      );
+      setSessionTitles(prev => ({ ...prev, ...Object.fromEntries(entries) }));
+    } catch(e){ console.warn('Err fetch sessions', e);} finally { setLoadingSessions(false); setSessionsLoaded(true); }
+  }
   useEffect(()=>{
-    const handler = () => refreshSessions();
+    const handler = () => {
+      if (activeTab === 'approfondimenti') refreshSessions(); else setPendingSessionsRefresh(true);
+    };
     window.addEventListener('curiow-chat-refresh-sessions', handler);
     return () => window.removeEventListener('curiow-chat-refresh-sessions', handler);
-  }, [currentUserId, gem.id]);
+  }, [currentUserId, gem.id, activeTab]);
+  useEffect(()=>{
+    if (activeTab === 'approfondimenti') {
+      if (!sessionsLoaded && !loadingSessions) {
+        refreshSessions();
+      } else if (pendingSessionsRefresh && !loadingSessions) {
+        setPendingSessionsRefresh(false);
+        refreshSessions();
+      }
+    }
+  }, [activeTab, deepSessions.length, loadingSessions, pendingSessionsRefresh, currentUserId, gem.id, sessionsLoaded]);
   useEffect(()=>{
     const handler = (ev: any) => { setCurrentChatSessionId(ev.detail?.sessionId || null); };
     window.addEventListener('curiow-chat-current-session', handler);
@@ -712,11 +739,11 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                           </div>
                         </div>
                         {loadingSessions && <p className="text-xs text-slate-500">Caricamento sessioni...</p>}
-                        {!loadingSessions && deepSessions.length===0 && <p className="text-xs text-slate-500">Nessuna sessione ancora. Crea una nuova conversazione nella chat a destra.</p>}
+                        {!loadingSessions && deepSessions.length===0 && sessionsLoaded && <p className="text-xs text-slate-500">Non sono ancora presenti approfondimenti.</p>}
                         <ul className="divide-y divide-slate-200 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                           {deepSessions.map(s => {
                             const modified = (s as any).modifiedAt?.seconds ? new Date((s as any).modifiedAt.seconds*1000) : (s.modifiedAt instanceof Date ? s.modifiedAt : new Date());
-                            const titleRaw = (s as any).firstQuestion || 'Sessione';
+                            const titleRaw = sessionTitles[s.sessionId||s.id] || (s as any).firstQuestion || 'Sessione';
                             const title = titleRaw.length > 80 ? titleRaw.slice(0,77)+'…' : titleRaw;
                             const isActive = currentChatSessionId && (currentChatSessionId === (s.sessionId||s.id));
                             return (
@@ -728,9 +755,12 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                                 </div>
                                 <div className="flex flex-col items-end gap-2">
                                   <button
-                                    onClick={(e)=>{ e.stopPropagation(); if(window.confirm('Eliminare definitivamente questa chat?')) { deleteDeepTopicSession(s.sessionId||s.id, currentUserId! ).then(()=>{ if(currentChatSessionId === (s.sessionId||s.id)) { window.dispatchEvent(new CustomEvent('curiow-chat-new-session',{ detail:{ questions: [] }})); } refreshSessions(); }); } }}
-                                    className="opacity-0 group-hover:opacity-100 transition text-red-500 hover:text-red-600 text-[10px] font-semibold"
-                                  >Elimina</button>
+                                    onClick={(e)=>{ e.stopPropagation(); setSessionToDelete(s); setDeleteModalOpen(true); }}
+                                    className="opacity-0 group-hover:opacity-100 transition text-slate-500 hover:text-red-600"
+                                    title="Elimina sessione"
+                                  >
+                                    <TrashIcon className="w-4 h-4" />
+                                  </button>
                                   <SparklesIcon className="w-4 h-4 text-indigo-500" />
                                 </div>
                               </li>
@@ -797,6 +827,15 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
         gemTitle={gem.title}
         gemDescription={rawDescription || rawSummary || ''}
         userId={currentUserId}
+      />
+      <AdminConfirmationModal
+        isOpen={deleteModalOpen}
+        onClose={()=>{ setDeleteModalOpen(false); setSessionToDelete(null); }}
+        onConfirm={()=>{ if(sessionToDelete && currentUserId){ deleteDeepTopicSession(sessionToDelete.sessionId||sessionToDelete.id, currentUserId).then(()=>{ if(currentChatSessionId === (sessionToDelete.sessionId||sessionToDelete.id)) { window.dispatchEvent(new CustomEvent('curiow-chat-new-session',{ detail:{ questions: [] }})); } refreshSessions(); }); }}}
+        title="Elimina sessione"
+        message="Sei sicuro di voler eliminare definitivamente questa sessione di approfondimento? L'operazione non è reversibile."
+        actionText="Elimina"
+        actionType="danger"
       />
     </>
   );

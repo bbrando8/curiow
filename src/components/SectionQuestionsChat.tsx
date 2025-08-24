@@ -22,6 +22,7 @@ interface SectionQuestionsChatProps {
   gemTitle?: string;
   gemDescription?: string; // nuovo: per body description
   userId?: string; // nuovo per creare sessione su Firestore
+  gemImageUrl?: string; // nuovo: thumbnail
 }
 
 interface ChatMessage { id: string; question: string; answer?: string; loading: boolean; error?: string; origin: 'suggested' | 'custom'; element?: { name: string; index?: number; title?: string|null; test?: string|null }; followUps?: string[]; historyId?: string; createdAt?: Date; }
@@ -48,7 +49,8 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   hideTrigger,
   gemTitle,
   gemDescription,
-  userId
+  userId,
+  gemImageUrl
 }) => {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -375,7 +377,12 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
         <div className="curiow-overlay" onClick={() => setOpen(false)}>
           <div className="curiow-chat-container" onClick={e => e.stopPropagation()}>
             <div className="curiow-header">
-              <div className="curiow-title">{gemTitle || 'Chat'}</div>
+              <div className="curiow-header-left">
+                {gemImageUrl && (
+                  <img src={gemImageUrl} alt={gemTitle || 'Gem'} className="curiow-gem-thumb" loading="lazy" />
+                )}
+                <div className="curiow-title">{gemTitle || 'Chat'}</div>
+              </div>
               <button className="curiow-close" onClick={() => setOpen(false)}>×</button>
             </div>
 

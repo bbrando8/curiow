@@ -144,3 +144,10 @@
   .curiow-top-suggestions { background:#0f172a; border-bottom-color:#1e293b; }
   .curiow-suggestions-group-title { color:#94a3b8; }
 }
+
+.curiow-header-left { display:flex; align-items:center; gap:.55rem; min-width:0; }
+.curiow-gem-thumb { width:32px; height:32px; object-fit:cover; border-radius:8px; flex-shrink:0; box-shadow:0 0 0 1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.15); }
+@media (min-width: 640px) { .curiow-gem-thumb { display:none; } }
+@media (prefers-color-scheme: dark) {
+  .curiow-gem-thumb { box-shadow:0 0 0 1px rgba(255,255,255,0.08), 0 2px 4px -1px rgba(0,0,0,0.6); }
+}
