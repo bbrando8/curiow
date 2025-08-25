@@ -15,7 +15,7 @@ import QuickExplainerSection from './GemDetailSections/QuickExplainerSection';
 import GemDetailTabs from './GemDetailTabs';
 import GemDetailChat from './GemDetailChat';
 import UserQuestionItem from './UserQuestionItem';
-import { buildParagraphs, getReadingTime } from '../utils/gemUtils';
+import { buildParagraphs, getReadingTime, handleProtectedAction } from '../utils/gemUtils';
 
 interface GemDetailViewProps {
   gem: Gem;
@@ -40,16 +40,12 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   const [userQuestion, setUserQuestion] = useState('');
   const [isSourcesOpen, setIsSourcesOpen] = useState(false);
   const [hasAutoScrolled, setHasAutoScrolled] = useState(false);
+  const [showShareBar, setShowShareBar] = useState(false); // FIX: aggiunto stato mancante
   const imgRef = useRef<HTMLImageElement | null>(null);
   // nuovo stato per tab
   const [activeTab, setActiveTab] = useState<'tips' | 'saggio' | 'approfondimenti'>('tips');
   // stato per chat
   const [isChatOpen, setIsChatOpen] = useState(false);
-  // refs per animazione cross-fade
-  const tipsRef = useRef<HTMLDivElement | null>(null);
-  const saggioRef = useRef<HTMLDivElement | null>(null);
-  const [contentHeight, setContentHeight] = useState<number>(0);
-  const [showShareBar, setShowShareBar] = useState(false);
   const [generatedQuestions, setGeneratedQuestions] = useState<(any)[]>([]);
   const [deepSessions, setDeepSessions] = useState<DeepTopicSession[]>([]);
   const [currentChatSessionId, setCurrentChatSessionId] = useState<string | null>(null);
@@ -108,27 +104,10 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   const emailUrl = `mailto:?subject=${encodeURIComponent('Consiglio: ' + gem.title)}&body=${encodeURIComponent(shareText + '\n' + currentUrl)}`;
   // Instagram non ha share URL web: fallback copia link
 
-  // funzione misura altezza contenuto attivo
-  const measureActiveHeight = () => {
-    const el = activeTab === 'tips' ? tipsRef.current : saggioRef.current;
-    if (el) {
-      // usa scrollHeight per includere overflow
-      const h = el.scrollHeight;
-      setContentHeight(h);
-    }
-  };
-
   useEffect(() => {
     // misura dopo cambio tab / gem
-    requestAnimationFrame(() => measureActiveHeight());
+    requestAnimationFrame(() => {});
   }, [activeTab, gem.id]);
-
-  useEffect(() => {
-    // misura al resize per mantenere altezza coerente
-    const onResize = () => measureActiveHeight();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
 
   // Funzione per scrollare il titolo allineandolo appena sotto l'header sticky
   const scrollTitleIntoView = (smooth = false) => {
@@ -191,288 +170,28 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   const generalQuestions = generatedQuestions.filter(q => q.section === 'general').slice(0,3);
 
   // Sostituisci renderMiniThread con i nuovi componenti modulari
-  const renderMiniThread = (content: any) => {
-    const steps = Array.isArray(content.steps) ? content.steps : [];
-    const openChat = (section: string, index: number | undefined, qs: any[]) => {
-      const enriched = qs.map(q => {
-        if (section === 'step' && typeof index === 'number') {
-          const step = steps[index] || {};
-          return { ...q, element: { name: section, index, title: step.title || null, test: step.body || null } };
-        }
-        if (section === 'payoff') {
-          return { ...q, element: { name: section, title: 'Payoff', test: content.payoff || null } };
-        }
-        return { ...q, element: { name: section } };
-      });
-      // Aggiungi sempre le domande generali alle domande di sezione
-      const generalEnriched = generalQuestions.map(q => ({...q, element: { name: 'general', title: null, test: null }}));
-      const allQuestions = [...enriched, ...generalEnriched];
-      window.dispatchEvent(new CustomEvent('curiow-chat-open', { detail: { questions: allQuestions } }));
-    };
-    return (
-      <div className="mt-6 space-y-6">
-        <div className="space-y-4">
-          {steps.map((s: any, idx: number) => {
-            const qs = getSectionQuestions('step', idx);
-            return (
-              <div key={idx} className="relative pl-10">
-                <div className="absolute left-0 top-0 flex flex-col items-center">
-                  <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm font-semibold shadow">{idx+1}</div>
-                  {idx < steps.length -1 && <div className="flex-1 w-px bg-gradient-to-b from-indigo-400 via-indigo-300 to-transparent mt-1"/>}
-                </div>
-                {qs.length > 0 && (
-                  <button
-                    onClick={() => openChat('step', idx, qs)}
-                    title="Domande / Approfondisci"
-                    className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
-                  >
-                    <SparklesIcon className="w-4 h-4" />
-                  </button>
-                )}
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{s.title}</h3>
-                <p className="mt-1 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{s.body}</p>
-              </div>
-            );
-          })}
-        </div>
-        {content.payoff && (
-          <div className="p-5 rounded-xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-indigo-500/10 border border-emerald-400/30 dark:border-emerald-400/20 relative">
-            {getSectionQuestions('payoff').length > 0 && (
-              <button
-                onClick={() => openChat('payoff', undefined, getSectionQuestions('payoff'))}
-                title="Domande / Approfondisci"
-                className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
-              >
-                <SparklesIcon className="w-4 h-4" />
-              </button>
-            )}
-            <div className="flex items-start">
-              <SparklesIcon className="w-6 h-6 text-emerald-500 mr-3 mt-0.5"/>
-              <div>
-                <p className="text-sm uppercase tracking-wide font-semibold text-emerald-600 dark:text-emerald-400">Payoff</p>
-                <p className="mt-1 font-medium text-slate-900 dark:text-slate-100 leading-relaxed">{content.payoff}</p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderMythVsReality = (content: any) => {
-    const openChat = (section: string, qs: any[]) => {
-      const enriched = qs.map(q => {
-        switch(section){
-          case 'myth': return { ...q, element: { name: section, title: 'Mito', test: content.myth || null } };
-          case 'reality': return { ...q, element: { name: section, title: 'Realtà', test: content.reality || null } };
-          case 'evidence': return { ...q, element: { name: section, title: 'Evidenze', test: content.evidence || null } };
-          case 'why_it_matters': return { ...q, element: { name: section, title: 'Perché conta', test: content.why_it_matters || null } };
-          default: return { ...q, element: { name: section } };
-        }
-      });
-      // Aggiungi sempre le domande generali alle domande di sezione
-      const generalEnriched = generalQuestions.map(q => ({...q, element: { name: 'general', title: null, test: null }}));
-      const allQuestions = [...enriched, ...generalEnriched];
-      window.dispatchEvent(new CustomEvent('curiow-chat-open', { detail: { questions: allQuestions } }));
-    };
-    return (
-      <div className="mt-6 space-y-6">
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="p-5 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 relative">
-            {getSectionQuestions('myth').length > 0 && (
-              <button
-                onClick={() => openChat('myth', getSectionQuestions('myth'))}
-                title="Domande / Approfondisci"
-                className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
-              >
-                <SparklesIcon className="w-4 h-4" />
-              </button>
-            )}
-            <p className="text-xs font-bold uppercase tracking-wide text-rose-600 dark:text-rose-300">Mito</p>
-            <p className="mt-2 text-rose-800 dark:text-rose-200 font-medium leading-relaxed whitespace-pre-wrap">{content.myth}</p>
-          </div>
-          <div className="p-5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 relative overflow-hidden">
-            {getSectionQuestions('reality').length > 0 && (
-              <button
-                onClick={() => openChat('reality', getSectionQuestions('reality'))}
-                title="Domande / Approfondisci"
-                className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
-              >
-                <SparklesIcon className="w-4 h-4" />
-              </button>
-            )}
-            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_80%_20%,rgba(16,185,129,0.15),transparent_60%)]"/>
-            <p className="text-xs font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">Realtà</p>
-            <p className="mt-2 text-emerald-800 dark:text-emerald-200 font-medium leading-relaxed whitespace-pre-wrap">{content.reality}</p>
-          </div>
-        </div>
-        {content.evidence && (
-          <div className="p-4 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 relative">
-            {getSectionQuestions('evidence').length > 0 && (
-              <button
-                onClick={() => openChat('evidence', getSectionQuestions('evidence'))}
-                title="Domande / Approfondisci"
-                className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
-              >
-                <SparklesIcon className="w-4 h-4" />
-              </button>
-            )}
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Evidenze</p>
-            <p className="mt-1 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{content.evidence}</p>
-          </div>
-        )}
-        {content.why_it_matters && (
-          <div className="p-5 rounded-xl bg-gradient-to-r from-indigo-500/10 via-violet-500/10 to-fuchsia-500/10 border border-indigo-300/30 dark:border-indigo-300/20 relative">
-            {getSectionQuestions('why_it_matters').length > 0 && (
-              <button
-                onClick={() => openChat('why_it_matters', getSectionQuestions('why_it_matters'))}
-                title="Domande / Approfondisci"
-                className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
-              >
-                <SparklesIcon className="w-4 h-4" />
-              </button>
-            )}
-            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Perché conta</p>
-            <p className="mt-2 font-medium text-slate-900 dark:text-slate-100 leading-relaxed whitespace-pre-wrap">{content.why_it_matters}</p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderFactCard = (content: any) => {
-    const facts: string[] = Array.isArray(content.facts) ? content.facts : [];
-    return (
-      <div className="mt-6 space-y-5">
-        {content.hook && (
-          <div className="p-5 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow">
-            <p className="text-sm font-semibold tracking-wide uppercase opacity-90">Dato Chiave</p>
-            <p className="mt-1 text-lg leading-snug font-bold whitespace-pre-wrap">{content.hook}</p>
-          </div>
-        )}
-        {facts.length > 0 && (
-          <div className="grid gap-3">
-            {facts.map((f, i) => (
-              <div key={i} className="p-4 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex">
-                <div className="mr-3 mt-0.5 text-indigo-500 font-semibold text-xs">FACT {i+1}</div>
-                <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{f}</p>
-              </div>
-            ))}
-          </div>
-        )}
-        {content.implication && (
-          <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Implicazione</p>
-            <p className="mt-1 text-sm text-amber-900 dark:text-amber-100 whitespace-pre-wrap leading-relaxed">{content.implication}</p>
-          </div>
-        )}
-        {content.action && (
-          <div className="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Azione</p>
-            <p className="mt-1 text-sm font-medium text-emerald-900 dark:text-emerald-100 whitespace-pre-wrap leading-relaxed">{content.action}</p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderProsCons = (content: any) => {
-    const pros: string[] = Array.isArray(content.pros) ? content.pros : [];
-    const cons: string[] = Array.isArray(content.cons) ? content.cons : [];
-    return (
-      <div className="mt-6 space-y-6">
-        {content.scenario && (
-          <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Scenario</p>
-            <p className="mt-1 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{content.scenario}</p>
-          </div>
-        )}
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="p-5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
-            <p className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Pro</p>
-            <ul className="mt-2 space-y-2 text-sm text-emerald-900 dark:text-emerald-100">
-              {pros.map((p,i)=>(<li key={i} className="flex"><span className="mr-2 text-emerald-500 font-semibold">+</span><span className="flex-1 whitespace-pre-wrap leading-relaxed">{p}</span></li>))}
-              {pros.length===0 && <li className="text-emerald-700/70 dark:text-emerald-300/60 italic">Nessun pro indicato.</li>}
-            </ul>
-          </div>
-          <div className="p-5 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
-            <p className="text-xs font-bold uppercase tracking-wide text-rose-700 dark:text-rose-300">Contro</p>
-            <ul className="mt-2 space-y-2 text-sm text-rose-900 dark:text-rose-100">
-              {cons.map((c,i)=>(<li key={i} className="flex"><span className="mr-2 text-rose-500 font-semibold">-</span><span className="flex-1 whitespace-pre-wrap leading-relaxed">{c}</span></li>))}
-              {cons.length===0 && <li className="text-rose-700/70 dark:text-rose-300/60 italic">Nessun contro indicato.</li>}
-            </ul>
-          </div>
-        </div>
-        {content.advice && (
-          <div className="p-5 rounded-xl bg-gradient-to-r from-indigo-500/10 via-sky-500/10 to-emerald-500/10 border border-indigo-300/30 dark:border-indigo-300/20">
-            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Sintesi / Consiglio</p>
-            <p className="mt-2 font-medium text-slate-900 dark:text-slate-100 whitespace-pre-wrap leading-relaxed">{content.advice}</p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderQuickExplainer = (content: any) => {
-    return (
-      <div className="mt-6 space-y-6">
-        {content.analogy && (
-          <div className="p-5 rounded-xl bg-indigo-600 text-white shadow">
-            <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Analogia Guida</p>
-            <p className="mt-2 text-lg font-bold leading-snug whitespace-pre-wrap">{content.analogy}</p>
-          </div>
-        )}
-        {content.definition && (
-          <div className="p-4 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Definizione</p>
-            <p className="mt-1 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{content.definition}</p>
-          </div>
-        )}
-        <div className="grid md:grid-cols-2 gap-4">
-          {content.example && (
-            <div className="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Esempio</p>
-              <p className="mt-1 text-sm text-emerald-900 dark:text-emerald-100 whitespace-pre-wrap leading-relaxed">{content.example}</p>
-            </div>
-          )}
-          {content.anti_example && (
-            <div className="p-4 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
-              <p className="text-xs font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">Non È Questo</p>
-              <p className="mt-1 text-sm text-rose-900 dark:text-rose-100 whitespace-pre-wrap leading-relaxed">{content.anti_example}</p>
-            </div>
-          )}
-        </div>
-        {content.takeaway && (
-            <div className="p-5 rounded-xl bg-gradient-to-r from-fuchsia-500/10 via-violet-500/10 to-indigo-500/10 border border-fuchsia-300/30 dark:border-fuchsia-300/20">
-              <p className="text-xs font-semibold uppercase tracking-wide text-fuchsia-600 dark:text-fuchsia-300">Takeaway</p>
-              <p className="mt-2 font-medium text-slate-900 dark:text-slate-100 whitespace-pre-wrap leading-relaxed">{content.takeaway}</p>
-            </div>
-        )}
-      </div>
-    );
-  };
-
+  // (funzioni inline obsolete rimosse: renderMiniThread, renderMythVsReality, renderFactCard, renderProsCons, renderQuickExplainer)
   // Sostituisci renderStructuredContent con i nuovi componenti modulari
   const renderStructuredContent = () => {
     const content = (gem as any).content;
     if (!content || !content.template) return null;
+    const commonProps: any = { getSectionQuestions, generalQuestions, isLoggedIn, onLogin };
     switch (content.template) {
       case 'mini_thread':
-        return <MiniThreadSection content={content} getSectionQuestions={getSectionQuestions} generalQuestions={generalQuestions} />;
+        return <MiniThreadSection content={content} {...commonProps} />;
       case 'myth_vs_reality':
-        return <MythVsRealitySection content={content} getSectionQuestions={getSectionQuestions} generalQuestions={generalQuestions} />;
+        return <MythVsRealitySection content={content} {...commonProps} />;
       case 'fact_card':
-        return <FactCardSection content={content} />;
+        return <FactCardSection content={content} {...commonProps} />;
       case 'pros_cons':
-        return <ProsConsSection content={content} />;
+        return <ProsConsSection content={content} {...commonProps} />;
       case 'quick_explainer':
-        return <QuickExplainerSection content={content} />;
+        return <QuickExplainerSection content={content} {...commonProps} />;
       default:
         return null;
     }
   };
 
-  // --- fine rendering contenuti template ---
 
   // Testo completo del saggio (nuovo: può essere in gem.content.description)
   const fullDescription: string | undefined = (gem as any)?.content?.description;
@@ -535,11 +254,12 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
     return ()=> window.removeEventListener('curiow-chat-current-session', handler);
   },[]);
 
-  // Gestione apertura chat tramite evento globale
+  // Gestione apertura chat tramite evento globale - DISABILITATA per evitare conflitti
   useEffect(() => {
     const openChatHandler = () => {
       setIsChatOpen(true);
-      window.history.pushState({ chat: true, tab: activeTab }, '', '');
+      // RIMOSSO: pushState che può interferire con LoginModal
+      // window.history.pushState({ chat: true, tab: activeTab }, '', '');
     };
     window.addEventListener('curiow-chat-open', openChatHandler);
     window.addEventListener('curiow-chat-use-session', openChatHandler);
@@ -551,25 +271,23 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
     };
   }, [activeTab]);
 
-  // Gestione history per chat/tab
+  // Gestione history per chat/tab - SEMPLIFICATA per evitare conflitti con LoginModal
   useEffect(() => {
-    window.history.replaceState({ chat: isChatOpen, tab: activeTab }, '', '');
+    // Solo inizializza lo stato, non fare push
+    if (typeof window !== 'undefined') {
+      window.history.replaceState({ chat: isChatOpen, tab: activeTab }, '', '');
+    }
   }, []);
-  useEffect(() => {
-    window.history.pushState({ chat: isChatOpen, tab: activeTab }, '', '');
-  }, [isChatOpen, activeTab]);
+
+  // Listener popstate - SEMPLIFICATO
   useEffect(() => {
     const onPopState = (ev: PopStateEvent) => {
       const state = ev.state || {};
-      if (state.chat) {
-        setIsChatOpen(true);
-      } else if (isChatOpen) {
-        setIsChatOpen(false);
-      } else if (state.tab && state.tab !== 'tips') {
-        setActiveTab('tips');
-      } else if (activeTab !== 'tips') {
-        setActiveTab('tips');
-      } else {
+      if (state.chat !== undefined && state.chat !== isChatOpen) {
+        setIsChatOpen(state.chat);
+      } else if (state.tab && state.tab !== activeTab) {
+        setActiveTab(state.tab);
+      } else if (!state.chat && !state.tab) {
         onBack();
       }
     };
@@ -717,22 +435,15 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                   </div>
                 </div>
 
-                <div className="mt-6 relative" style={{ height: contentHeight ? contentHeight : undefined }}>
-                  {/* Pannello Tips */}
-                  <div
-                    ref={tipsRef}
-                    className={`absolute inset-0 transition-opacity duration-400 ease-in-out ${activeTab==='tips' ? 'opacity-100' : 'opacity-0 pointer-events-none'} overflow-visible`}
-                  >
-                    {(() => { const structuredContent = renderStructuredContent(); return structuredContent ? structuredContent : (
+                {/* Tab panels: mostra solo il tab attivo, niente absolute, niente wrapper con altezza */}
+                <div className="mt-6 relative">
+                  {activeTab === 'tips' && (
+                    (() => { const structuredContent = renderStructuredContent(); return structuredContent ? structuredContent : (
                       <p className="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{fullDescription || ''}</p>
-                    ); })()}
-                  </div>
-                  {/* Pannello Saggio */}
-                  <div
-                    ref={saggioRef}
-                    className={`absolute inset-0 transition-opacity duration-400 ease-in-out ${activeTab==='saggio' ? 'opacity-100' : 'opacity-0 pointer-events-none'} overflow-visible`}
-                  >
-                    {fullDescription ? (
+                    ); })()
+                  )}
+                  {activeTab === 'saggio' && (
+                    fullDescription ? (
                       paragraphs.length > 0 ? (
                         <div className="prose prose-slate dark:prose-invert max-w-none">
                           {readingTime && (
@@ -759,55 +470,57 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                       )
                     ) : (
                       <p className="italic text-slate-500 dark:text-slate-400">Nessun testo disponibile.</p>
-                    )}
-                  </div>
-                  {/* Pannello Approfondimenti */}
-                  <div className={`absolute inset-0 transition-opacity duration-400 ease-in-out ${activeTab==='approfondimenti' ? 'opacity-100' : 'opacity-0 pointer-events-none'} overflow-auto px-1 py-1`}>
-                    {!isLoggedIn && <p className="text-sm text-slate-500 dark:text-slate-400">Accedi per vedere le tue sessioni di approfondimento.</p>}
-                    {isLoggedIn && (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Sessioni Approfondimenti</h3>
-                          <div className="flex gap-2">
-                            <button onClick={()=>window.dispatchEvent(new CustomEvent('curiow-chat-new-session', {
-                              detail: { questions: generalQuestions.map(q => ({...q, element: { name: 'general', title: null, test: null }})) }
+                    )
+                  )}
+                  {activeTab === 'approfondimenti' && (
+                    <div className="overflow-auto px-1 py-1">
+                      {/* ...contenuto approfondimenti come prima... */}
+                      {!isLoggedIn && <p className="text-sm text-slate-500 dark:text-slate-400">Accedi per vedere le tue sessioni di approfondimento.</p>}
+                      {isLoggedIn && (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Sessioni Approfondimenti</h3>
+                            <div className="flex gap-2">
+                              <button onClick={()=>window.dispatchEvent(new CustomEvent('curiow-chat-new-session', {
+                                detail: { questions: generalQuestions.map(q => ({...q, element: { name: 'general', title: null, test: null }})) }
                             }))} className="px-2 py-1 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700">Nuova</button>
-                            <button onClick={refreshSessions} className="px-2 py-1 text-xs rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600">Refresh</button>
+                              <button onClick={refreshSessions} className="px-2 py-1 text-xs rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600">Refresh</button>
+                            </div>
                           </div>
+                          {loadingSessions && <p className="text-xs text-slate-500">Caricamento sessioni...</p>}
+                          {!loadingSessions && deepSessions.length===0 && sessionsLoaded && <p className="text-xs text-slate-500">Non sono ancora presenti approfondimenti.</p>}
+                          <ul className="divide-y divide-slate-200 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+                            {deepSessions.map(s => {
+                              const modified = (s as any).modifiedAt?.seconds ? new Date((s as any).modifiedAt.seconds*1000) : (s.modifiedAt instanceof Date ? s.modifiedAt : new Date());
+                              const titleRaw = sessionTitles[s.sessionId||s.id] || (s as any).firstQuestion || 'Sessione';
+                              const title = titleRaw.length > 80 ? titleRaw.slice(0,77)+'…' : titleRaw;
+                              const isActive = currentChatSessionId && (currentChatSessionId === (s.sessionId||s.id));
+                              return (
+                                <li key={s.id} className={`p-3 hover:bg-indigo-50 dark:hover:bg-slate-800 cursor-pointer flex items-start gap-3 group ${isActive ? 'bg-indigo-50 dark:bg-slate-800/60' : ''}`}
+                                    onClick={()=>window.dispatchEvent(new CustomEvent('curiow-chat-use-session',{ detail:{ sessionId: s.sessionId||s.id }}))}>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium text-slate-700 dark:text-slate-200 line-clamp-2" title={titleRaw}>{title}</p>
+                                    <p className="text-[10px] text-slate-500 dark:text-slate-400">Aggiornata: {modified.toLocaleString()}</p>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-2">
+                                    <button
+                                      onClick={(e)=>{ e.stopPropagation(); setSessionToDelete(s); setDeleteModalOpen(true); }}
+                                      className="opacity-0 group-hover:opacity-100 transition text-slate-500 hover:text-red-600"
+                                      title="Elimina sessione"
+                                    >
+                                      <TrashIcon className="w-4 h-4" />
+                                    </button>
+                                    <SparklesIcon className="w-4 h-4 text-indigo-500" />
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500">Le sessioni si aggiornano quando invii nuove domande.</p>
                         </div>
-                        {loadingSessions && <p className="text-xs text-slate-500">Caricamento sessioni...</p>}
-                        {!loadingSessions && deepSessions.length===0 && sessionsLoaded && <p className="text-xs text-slate-500">Non sono ancora presenti approfondimenti.</p>}
-                        <ul className="divide-y divide-slate-200 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
-                          {deepSessions.map(s => {
-                            const modified = (s as any).modifiedAt?.seconds ? new Date((s as any).modifiedAt.seconds*1000) : (s.modifiedAt instanceof Date ? s.modifiedAt : new Date());
-                            const titleRaw = sessionTitles[s.sessionId||s.id] || (s as any).firstQuestion || 'Sessione';
-                            const title = titleRaw.length > 80 ? titleRaw.slice(0,77)+'…' : titleRaw;
-                            const isActive = currentChatSessionId && (currentChatSessionId === (s.sessionId||s.id));
-                            return (
-                              <li key={s.id} className={`p-3 hover:bg-indigo-50 dark:hover:bg-slate-800 cursor-pointer flex items-start gap-3 group ${isActive ? 'bg-indigo-50 dark:bg-slate-800/60' : ''}`}
-                                  onClick={()=>window.dispatchEvent(new CustomEvent('curiow-chat-use-session',{ detail:{ sessionId: s.sessionId||s.id }}))}>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium text-slate-700 dark:text-slate-200 line-clamp-2" title={titleRaw}>{title}</p>
-                                  <p className="text-[10px] text-slate-500 dark:text-slate-400">Aggiornata: {modified.toLocaleString()}</p>
-                                </div>
-                                <div className="flex flex-col items-end gap-2">
-                                  <button
-                                    onClick={(e)=>{ e.stopPropagation(); setSessionToDelete(s); setDeleteModalOpen(true); }}
-                                    className="opacity-0 group-hover:opacity-100 transition text-slate-500 hover:text-red-600"
-                                    title="Elimina sessione"
-                                  >
-                                    <TrashIcon className="w-4 h-4" />
-                                  </button>
-                                  <SparklesIcon className="w-4 h-4 text-indigo-500" />
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-500">Le sessioni si aggiornano quando invii nuove domande.</p>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Domande generate */}
@@ -867,6 +580,8 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
         open={isChatOpen}
         onClose={handleCloseChat}
         onOpen={handleOpenChat}
+        isLoggedIn={isLoggedIn}
+        onLogin={onLogin}
       />
       <AdminConfirmationModal
         isOpen={deleteModalOpen}

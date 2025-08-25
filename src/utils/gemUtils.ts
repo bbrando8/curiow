@@ -26,3 +26,11 @@ export function getReadingTime(text?: string) {
   return { words, minutes, seconds, display };
 }
 
+export function handleProtectedAction(isLoggedIn: boolean, onLogin: (() => void) | undefined, action: () => void) {
+  console.log('[handleProtectedAction]', { isLoggedIn, hasOnLogin: !!onLogin });
+  if (isLoggedIn) {
+    action();
+  } else if (onLogin) {
+    onLogin();
+  }
+}

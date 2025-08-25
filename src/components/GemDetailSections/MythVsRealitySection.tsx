@@ -1,7 +1,8 @@
 import React from 'react';
 import { SparklesIcon } from '../icons';
+import { handleProtectedAction } from '../../utils/gemUtils';
 
-const MythVsRealitySection = ({ content, getSectionQuestions, generalQuestions }: any) => {
+const MythVsRealitySection = ({ content, getSectionQuestions, generalQuestions, isLoggedIn, onLogin }: any) => {
   const openChat = (section: string, qs: any[]) => {
     const enriched = qs.map(q => {
       switch(section){
@@ -22,7 +23,7 @@ const MythVsRealitySection = ({ content, getSectionQuestions, generalQuestions }
         <div className="p-5 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 relative">
           {getSectionQuestions('myth').length > 0 && (
             <button
-              onClick={() => openChat('myth', getSectionQuestions('myth'))}
+              onClick={() => handleProtectedAction(isLoggedIn, onLogin, () => openChat('myth', getSectionQuestions('myth')))}
               title="Domande / Approfondisci"
               className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
             >
@@ -35,7 +36,7 @@ const MythVsRealitySection = ({ content, getSectionQuestions, generalQuestions }
         <div className="p-5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 relative overflow-hidden">
           {getSectionQuestions('reality').length > 0 && (
             <button
-              onClick={() => openChat('reality', getSectionQuestions('reality'))}
+              onClick={() => handleProtectedAction(isLoggedIn, onLogin, () => openChat('reality', getSectionQuestions('reality')))}
               title="Domande / Approfondisci"
               className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
             >
@@ -51,7 +52,7 @@ const MythVsRealitySection = ({ content, getSectionQuestions, generalQuestions }
         <div className="p-4 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 relative">
           {getSectionQuestions('evidence').length > 0 && (
             <button
-              onClick={() => openChat('evidence', getSectionQuestions('evidence'))}
+              onClick={() => handleProtectedAction(isLoggedIn, onLogin, () => openChat('evidence', getSectionQuestions('evidence')))}
               title="Domande / Approfondisci"
               className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
             >
@@ -66,7 +67,7 @@ const MythVsRealitySection = ({ content, getSectionQuestions, generalQuestions }
         <div className="p-5 rounded-xl bg-gradient-to-r from-indigo-500/10 via-violet-500/10 to-fuchsia-500/10 border border-indigo-300/30 dark:border-indigo-300/20 relative">
           {getSectionQuestions('why_it_matters').length > 0 && (
             <button
-              onClick={() => openChat('why_it_matters', getSectionQuestions('why_it_matters'))}
+              onClick={() => handleProtectedAction(isLoggedIn, onLogin, () => openChat('why_it_matters', getSectionQuestions('why_it_matters')))}
               title="Domande / Approfondisci"
               className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
             >
@@ -82,4 +83,3 @@ const MythVsRealitySection = ({ content, getSectionQuestions, generalQuestions }
 };
 
 export default MythVsRealitySection;
-

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { callCuriowApi } from '../services/apiService';
 import { SparklesIcon } from './icons';
 import { PaperAirplaneIcon } from './icons';
 import { createDeepTopicSession, touchDeepTopicSession, fetchDeepTopicHistory } from '../services/firestoreService';
 import './SectionQuestionsChat.css'; // aggiunto
+import { handleProtectedAction } from '../utils/gemUtils';
 
 export interface SectionQuestionData {
   id: string;
@@ -26,6 +27,8 @@ interface SectionQuestionsChatProps {
   open?: boolean; // stato controllato
   onClose?: () => void; // callback chiusura
   onOpen?: () => void; // callback apertura
+  isLoggedIn?: boolean; // nuovo per gating login
+  onLogin?: () => void; // nuovo per mostrare modale login
 }
 
 interface ChatMessage { id: string; question: string; answer?: string; loading: boolean; error?: string; origin: 'suggested' | 'custom'; element?: { name: string; index?: number; title?: string|null; test?: string|null }; followUps?: string[]; historyId?: string; createdAt?: Date; }
@@ -57,6 +60,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   open: controlledOpen,
   onClose,
   onOpen
+  , isLoggedIn, onLogin
 }) => {
   // RIMOSSO: stato locale open
   // const [open, setOpen] = useState(false);
@@ -70,12 +74,25 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   const [sessionCreated, setSessionCreated] = useState(false);
   const [firstQuestionSet, setFirstQuestionSet] = useState(false);
   const [hasExistingHistory, setHasExistingHistory] = useState(false);
+  const [isProcessingLogin, setIsProcessingLogin] = useState(false); // Nuovo: evita loop
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const autoFiredRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string>('');
   const messagesRef = useRef<ChatMessage[]>([]);
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  // Helper per gestire login senza loop
+  const handleLoginRequest = useCallback(() => {
+    if (isProcessingLogin) return;
+    setIsProcessingLogin(true);
+    console.log('[SectionQuestionsChat] Login richiesto');
+    if (onLogin) {
+      onLogin();
+    }
+    // Reset dopo un breve delay
+    setTimeout(() => setIsProcessingLogin(false), 1000);
+  }, [onLogin, isProcessingLogin]);
 
   const ensureSession = async (forcedId?: string) => {
     const makeId = () => (forcedId ? forcedId : (crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)));
@@ -122,6 +139,10 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   };
 
   const ask = async (testo: string, origin: 'suggested'|'custom', presetId?: string, elementCtx?: { name: string; index?: number; title?: string|null; test?: string|null }) => {
+    if (!isLoggedIn) {
+      handleLoginRequest();
+      return;
+    }
     await ensureSession();
     if (!sessionCreated && userId) {
       const sid = sessionIdRef.current;
@@ -156,6 +177,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   };
 
   const showFollowUp = (followUp: string) => {
+    if (!isLoggedIn) { handleLoginRequest(); return; }
     ask(followUp, 'custom');
   };
 
@@ -327,7 +349,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
         <div className="curiow-suggestions-group-title">Suggerite per questa sessione</div>
         <div className="curiow-suggestions-container">
           {dynamicSuggestions.map((q, idx) => (
-            <div key={q.id} className="curiow-suggestion" onClick={() => ask(q.testo, 'suggested', q.id, q.element)}>
+            <div key={q.id} className="curiow-suggestion" onClick={() => handleProtectedAction(!!isLoggedIn, () => onLogin && onLogin(), () => ask(q.testo, 'suggested', q.id, q.element))}>
               <div className="curiow-suggestion-index">{idx + 1}</div>
               <div className="curiow-suggestion-text">{q.testo}</div>
             </div>
@@ -346,7 +368,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
         <div className="curiow-suggestions-group-title">Domande generali</div>
         <div className="curiow-suggestions-container">
           {baseSuggestions.map((q, idx) => (
-            <div key={q.id} className="curiow-suggestion" onClick={() => ask(q.testo, 'suggested', q.id, q.element)}>
+            <div key={q.id} className="curiow-suggestion" onClick={() => handleProtectedAction(!!isLoggedIn, () => onLogin && onLogin(), () => ask(q.testo, 'suggested', q.id, q.element))}>
               <div className="curiow-suggestion-index">{idx + 1}</div>
               <div className="curiow-suggestion-text">{q.testo}</div>
             </div>
@@ -364,7 +386,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
         <div className="curiow-suggestions-group-title">Domande per questa sezione</div>
         <div className="curiow-suggestions-container">
           {sectionBaseSuggestions.map((q, idx) => (
-            <div key={q.id} className="curiow-suggestion" onClick={() => ask(q.testo, 'suggested', q.id, q.element)}>
+            <div key={q.id} className="curiow-suggestion" onClick={() => handleProtectedAction(!!isLoggedIn, () => onLogin && onLogin(), () => ask(q.testo, 'suggested', q.id, q.element))}>
               <div className="curiow-suggestion-index">{idx + 1}</div>
               <div className="curiow-suggestion-text">{q.testo}</div>
             </div>
@@ -377,7 +399,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   return (
     <div className={`curiow-section-questions-chat ${open ? 'open' : ''}`}>
       {!hideTrigger && (
-        <div className="curiow-trigger" onClick={() => onOpen && onOpen()}>
+        <div className="curiow-trigger" onClick={() => handleProtectedAction(!!isLoggedIn, () => onLogin && onLogin(), () => onOpen && onOpen())}>
           <SparklesIcon />
           <span>Fai una domanda</span>
         </div>
@@ -440,6 +462,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
                   onChange={e => setCustomInput(e.target.value)}
                   onKeyDown={e => {
                     if (e.key === 'Enter' && customInput.trim() !== '') {
+                      if (!isLoggedIn) { handleLoginRequest(); return; }
                       ask(customInput.trim(), 'custom');
                       setCustomInput('');
                     }
@@ -447,6 +470,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
                 />
                 <button className="curiow-send" type="button" aria-label="Invia domanda" disabled={customInput.trim()===''} onClick={() => {
                   if (customInput.trim() !== '') {
+                    if (!isLoggedIn) { handleLoginRequest(); return; }
                     ask(customInput.trim(), 'custom');
                     setCustomInput('');
                   }

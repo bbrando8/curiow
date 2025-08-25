@@ -895,6 +895,32 @@ const App: React.FC = () => {
     </RequireAdmin>
   );
 
+  // Scroll lock durante apertura LoginModal
+  useEffect(() => {
+    if (showLoginModal) {
+      const scrollY = window.scrollY;
+      (document.body as any).dataset.curiowScrollY = String(scrollY);
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+    } else {
+      const stored = (document.body as any).dataset.curiowScrollY;
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      if (stored) {
+        window.scrollTo(0, parseInt(stored, 10));
+        delete (document.body as any).dataset.curiowScrollY;
+      }
+    }
+  }, [showLoginModal]);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
         <Routes>

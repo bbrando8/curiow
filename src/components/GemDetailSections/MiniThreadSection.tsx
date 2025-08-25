@@ -1,7 +1,8 @@
 import React from 'react';
 import { SparklesIcon } from '../icons';
+import { handleProtectedAction } from '../../utils/gemUtils';
 
-const MiniThreadSection = ({ content, getSectionQuestions, generalQuestions }: any) => {
+const MiniThreadSection = ({ content, getSectionQuestions, generalQuestions, isLoggedIn, onLogin }: any) => {
   const steps = Array.isArray(content.steps) ? content.steps : [];
   const openChat = (section: string, index: number | undefined, qs: any[]) => {
     const enriched = qs.map(q => {
@@ -31,7 +32,7 @@ const MiniThreadSection = ({ content, getSectionQuestions, generalQuestions }: a
               </div>
               {qs.length > 0 && (
                 <button
-                  onClick={() => openChat('step', idx, qs)}
+                  onClick={() => handleProtectedAction(isLoggedIn, onLogin, () => openChat('step', idx, qs))}
                   title="Domande / Approfondisci"
                   className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
                 >
@@ -48,7 +49,7 @@ const MiniThreadSection = ({ content, getSectionQuestions, generalQuestions }: a
         <div className="p-5 rounded-xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-indigo-500/10 border border-emerald-400/30 dark:border-emerald-400/20 relative">
           {getSectionQuestions('payoff').length > 0 && (
             <button
-              onClick={() => openChat('payoff', undefined, getSectionQuestions('payoff'))}
+              onClick={() => handleProtectedAction(isLoggedIn, onLogin, () => openChat('payoff', undefined, getSectionQuestions('payoff')))}
               title="Domande / Approfondisci"
               className="absolute right-2 top-2 w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600/90 hover:bg-indigo-600 text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
             >
@@ -69,4 +70,3 @@ const MiniThreadSection = ({ content, getSectionQuestions, generalQuestions }: a
 };
 
 export default MiniThreadSection;
-
