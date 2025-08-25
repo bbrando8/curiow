@@ -191,10 +191,6 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
       const sug: SectionQuestionData[] = (detail.questions || []).filter(q => q.element?.name !== 'general');
       setDynamicSuggestions(sug);
       setOpen(true);
-      setTimeout(() => {
-        const input = document.getElementById('curiow-chat-input');
-        (input as HTMLInputElement | null)?.focus();
-      }, 50);
     };
     window.addEventListener('curiow-chat-open', handler as EventListener);
     return () => window.removeEventListener('curiow-chat-open', handler as EventListener);
@@ -248,10 +244,11 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
       setHideInitialSuggestions(false);
       setHasExistingHistory(false);
       setOpen(true);
-      setTimeout(() => {
-        const input = document.getElementById('curiow-chat-input');
-        (input as HTMLInputElement | null)?.focus();
-      }, 50);
+      // RIMOSSO: focus automatico su input
+      // setTimeout(() => {
+      //   const input = document.getElementById('curiow-chat-input');
+      //   (input as HTMLInputElement | null)?.focus();
+      // }, 50);
     };
 
     window.addEventListener('curiow-chat-use-session', useSessionHandler as EventListener);
