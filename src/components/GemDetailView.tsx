@@ -7,6 +7,15 @@ import Header from './Header';
 import { fetchGeneratedQuestionsByGem, fetchDeepTopicSessions, DeepTopicSession, deleteDeepTopicSession, getSessionTitle } from '../services/firestoreService';
 import AdminConfirmationModal from './admin/AdminConfirmationModal';
 import SectionQuestionsChat from './SectionQuestionsChat';
+import MiniThreadSection from './GemDetailSections/MiniThreadSection';
+import MythVsRealitySection from './GemDetailSections/MythVsRealitySection';
+import FactCardSection from './GemDetailSections/FactCardSection';
+import ProsConsSection from './GemDetailSections/ProsConsSection';
+import QuickExplainerSection from './GemDetailSections/QuickExplainerSection';
+import GemDetailTabs from './GemDetailTabs';
+import GemDetailChat from './GemDetailChat';
+import UserQuestionItem from './UserQuestionItem';
+import { buildParagraphs, getReadingTime } from '../utils/gemUtils';
 
 interface GemDetailViewProps {
   gem: Gem;
@@ -26,22 +35,6 @@ interface GemDetailViewProps {
   channels?: Channel[];
   currentUserId?: string; // nuovo per sessioni approfondimenti
 }
-
-const UserQuestionItem: React.FC<{ userQuestion: UserQuestion }> = ({ userQuestion }) => (
-    <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-800 rounded-lg">
-        <p className="font-semibold text-sm text-slate-600 dark:text-slate-300">Domanda: <span className="font-normal">{userQuestion.question}</span></p>
-        <div className="mt-2 text-sm text-slate-800 dark:text-slate-200">
-            {userQuestion.isGenerating ? (
-                 <div className="flex items-center space-x-2">
-                    <SparklesIcon className="w-4 h-4 animate-pulse text-indigo-400" />
-                    <span>Generazione risposta...</span>
-                </div>
-            ) : (
-                <p className="whitespace-pre-wrap">{userQuestion.answer}</p>
-            )}
-        </div>
-    </div>
-);
 
 const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, onSaveRequest, onRemoveRequest, onAddUserQuestion, onTagSelect, isLoggedIn, user, onLogin, onLogout, onNavigate, selectedFilter, onSelectFilter, channels, currentUserId }) => {
   const [userQuestion, setUserQuestion] = useState('');
@@ -197,6 +190,7 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   };
   const generalQuestions = generatedQuestions.filter(q => q.section === 'general').slice(0,3);
 
+  // Sostituisci renderMiniThread con i nuovi componenti modulari
   const renderMiniThread = (content: any) => {
     const steps = Array.isArray(content.steps) ? content.steps : [];
     const openChat = (section: string, index: number | undefined, qs: any[]) => {
@@ -458,62 +452,36 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
     );
   };
 
+  // Sostituisci renderStructuredContent con i nuovi componenti modulari
   const renderStructuredContent = () => {
     const content = (gem as any).content;
     if (!content || !content.template) return null;
     switch (content.template) {
       case 'mini_thread':
-        return renderMiniThread(content);
+        return <MiniThreadSection content={content} getSectionQuestions={getSectionQuestions} generalQuestions={generalQuestions} />;
       case 'myth_vs_reality':
-        return renderMythVsReality(content);
+        return <MythVsRealitySection content={content} getSectionQuestions={getSectionQuestions} generalQuestions={generalQuestions} />;
       case 'fact_card':
-        return renderFactCard(content);
+        return <FactCardSection content={content} />;
       case 'pros_cons':
-        return renderProsCons(content);
+        return <ProsConsSection content={content} />;
       case 'quick_explainer':
-        return renderQuickExplainer(content);
+        return <QuickExplainerSection content={content} />;
       default:
         return null;
     }
   };
+
   // --- fine rendering contenuti template ---
 
   // Testo completo del saggio (nuovo: può essere in gem.content.description)
   const fullDescription: string | undefined = (gem as any)?.content?.description;
 
   // Utility: segmentazione in paragrafi leggibili (solo visualizzazione)
-  const buildParagraphs = (text?: string): string[] => {
-    if (!text) return [];
-    const normalized = text.replace(/\r\n?/g, '\n').trim();
-    // Se l'autore ha già usato paragrafi (doppie newline) rispetta quelli
-    const explicit = normalized.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
-    if (explicit.length > 1) return explicit;
-    // Altrimenti suddividi per punto + spazio + Maiuscola (mantieni il punto)
-    const periodSplit = normalized
-      // comprime whitespace multiplo a singolo spazio per consistenza
-      .replace(/\n+/g, ' ')
-      .replace(/\s{2,}/g, ' ')
-      .split(/(?<=\.)\s+(?=[A-ZÀ-ÖØ-Ý])/)
-      .map(s => s.trim())
-      .filter(Boolean);
-    if (periodSplit.length > 1) return periodSplit;
-    // fallback: ritorna intero blocco
-    return [normalized];
-  };
-
   const paragraphs = buildParagraphs(fullDescription);
 
   // Calcolo tempo di lettura (200 wpm medio)
-  const readingTime = (() => {
-    if (!fullDescription) return null;
-    const words = fullDescription.trim().split(/\s+/).filter(Boolean).length;
-    const WPM = 200; // media adulti IT
-    const minutesFloat = words / WPM;
-    const minutes = Math.floor(minutesFloat);
-    const seconds = Math.round((minutesFloat - minutes) * 60);
-    const display = minutes < 1 ? `${seconds < 10 ? '~15s' : `${seconds}s`}` : `${minutes} min${minutes === 1 ? '' : ''}${seconds >= 30 && minutes < 10 ? ' +' : ''}`;
-    return { words, minutes, seconds, display };
-  })();
+  const readingTime = getReadingTime(fullDescription);
 
   useEffect(() => {
     // Log JWT Firebase solo per admin quando si accede al dettaglio di una gemma
