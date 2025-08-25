@@ -749,8 +749,21 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
                   />
                 </div>
 
-                {!formData.title && !editingTopic && (
-                  <div className="flex justify-end mb-4">
+                {/* Pulsante Chiudi sempre visibile */}
+                <div className="flex justify-between mb-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (editingTopic) setEditingTopic(null);
+                      else setShowCreateModal(false);
+                    }}
+                    className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors"
+                  >
+                    Chiudi
+                  </button>
+
+                  {/* Pulsante Genera Dettagli solo in creazione */}
+                  {!formData.title && !editingTopic && (
                     <button
                       type="button"
                       onClick={handleGenerateDetails}
@@ -759,8 +772,8 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
                     >
                       {isGenerating ? 'Generazione...' : 'Genera Dettagli'}
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {(formData.title || editingTopic) && (
                   <>
