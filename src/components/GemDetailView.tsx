@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Gem, UserQuestion, User, Filter, Channel } from '../types';
 import { ChevronLeftIcon, HeartIcon, ShareIcon, PaperAirplaneIcon, SparklesIcon, PlusCircleIcon, TagIcon, LinkIcon, ChevronDownIcon, LightBulbIcon, BookOpenIcon, FacebookIcon, InstagramIcon, WhatsappIcon, MailIcon, CopyIcon, MagnifyingGlassIcon, TrashIcon } from './icons';
+import { ChatBubbleIcon } from './icons';
 import { trackEvent, getIdToken } from '../services/firebase';
 import { usePageMeta } from '../hooks/usePageMeta';
 import Header from './Header';
@@ -259,7 +260,7 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
     const openChatHandler = () => {
       setIsChatOpen(true);
       // RIMOSSO: pushState che può interferire con LoginModal
-      // window.history.pushState({ chat: true, tab: activeTab }, '', '');
+      window.history.pushState({ chat: true, tab: activeTab }, '', '');
     };
     window.addEventListener('curiow-chat-open', openChatHandler);
     window.addEventListener('curiow-chat-use-session', openChatHandler);
@@ -304,13 +305,16 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   // Funzione di chiusura chat
   const handleCloseChat = () => {
     setIsChatOpen(false);
-    window.history.pushState({ chat: false, tab: activeTab }, '', '');
+    // Invece di pushState, facciamo history.back() per tornare allo stato precedente
+    if (window.history.state && window.history.state.chat) {
+      window.history.back();
+    }
   };
 
   // Logica di back personalizzata
   const handleBack = () => {
     if (isChatOpen) {
-      setIsChatOpen(false);
+      handleCloseChat();
       return;
     }
     if (activeTab !== 'tips') {
@@ -429,7 +433,7 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                       title="Vista Approfondimenti (sessioni)"
                       className={`relative flex items-center justify-center w-9 h-9 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:focus:ring-indigo-500 group ${activeTab==='approfondimenti' ? 'bg-gradient-to-tr from-indigo-500 to-violet-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300'}`}
                     >
-                      <MagnifyingGlassIcon className="w-5 h-5" />
+                      <ChatBubbleIcon className="w-5 h-5" />
                       {activeTab==='approfondimenti' && <span className="absolute -bottom-1 h-1 w-4 rounded-full bg-white/70 dark:bg-white/40"/>}
                     </button>
                   </div>
@@ -505,7 +509,7 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                                   <div className="flex flex-col items-end gap-2">
                                     <button
                                       onClick={(e)=>{ e.stopPropagation(); setSessionToDelete(s); setDeleteModalOpen(true); }}
-                                      className="opacity-0 group-hover:opacity-100 transition text-slate-500 hover:text-red-600"
+                                      className="opacity-0 group-hover:opacity-100 sm:opacity-100 transition text-slate-500 hover:text-red-600"
                                       title="Elimina sessione"
                                     >
                                       <TrashIcon className="w-4 h-4" />
