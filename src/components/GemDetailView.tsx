@@ -50,6 +50,8 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
   const imgRef = useRef<HTMLImageElement | null>(null);
   // nuovo stato per tab
   const [activeTab, setActiveTab] = useState<'tips' | 'saggio' | 'approfondimenti'>('tips');
+  // stato per chat
+  const [isChatOpen, setIsChatOpen] = useState(false);
   // refs per animazione cross-fade
   const tipsRef = useRef<HTMLDivElement | null>(null);
   const saggioRef = useRef<HTMLDivElement | null>(null);
@@ -565,6 +567,73 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
     return ()=> window.removeEventListener('curiow-chat-current-session', handler);
   },[]);
 
+  // Gestione apertura chat tramite evento globale
+  useEffect(() => {
+    const openChatHandler = () => {
+      setIsChatOpen(true);
+      window.history.pushState({ chat: true, tab: activeTab }, '', '');
+    };
+    window.addEventListener('curiow-chat-open', openChatHandler);
+    window.addEventListener('curiow-chat-use-session', openChatHandler);
+    window.addEventListener('curiow-chat-new-session', openChatHandler);
+    return () => {
+      window.removeEventListener('curiow-chat-open', openChatHandler);
+      window.removeEventListener('curiow-chat-use-session', openChatHandler);
+      window.removeEventListener('curiow-chat-new-session', openChatHandler);
+    };
+  }, [activeTab]);
+
+  // Gestione history per chat/tab
+  useEffect(() => {
+    window.history.replaceState({ chat: isChatOpen, tab: activeTab }, '', '');
+  }, []);
+  useEffect(() => {
+    window.history.pushState({ chat: isChatOpen, tab: activeTab }, '', '');
+  }, [isChatOpen, activeTab]);
+  useEffect(() => {
+    const onPopState = (ev: PopStateEvent) => {
+      const state = ev.state || {};
+      if (state.chat) {
+        setIsChatOpen(true);
+      } else if (isChatOpen) {
+        setIsChatOpen(false);
+      } else if (state.tab && state.tab !== 'tips') {
+        setActiveTab('tips');
+      } else if (activeTab !== 'tips') {
+        setActiveTab('tips');
+      } else {
+        onBack();
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [isChatOpen, activeTab, onBack]);
+
+  // Funzione di apertura chat
+  const handleOpenChat = () => {
+    setIsChatOpen(true);
+    window.history.pushState({ chat: true, tab: activeTab }, '', '');
+  };
+
+  // Funzione di chiusura chat
+  const handleCloseChat = () => {
+    setIsChatOpen(false);
+    window.history.pushState({ chat: false, tab: activeTab }, '', '');
+  };
+
+  // Logica di back personalizzata
+  const handleBack = () => {
+    if (isChatOpen) {
+      setIsChatOpen(false);
+      return;
+    }
+    if (activeTab !== 'tips') {
+      setActiveTab('tips');
+      return;
+    }
+    onBack();
+  };
+
   return (
     <>
       <div className="max-w-2xl mx-auto">
@@ -579,7 +648,7 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
           onSelectFilter={handleFilterSelect}
           channels={channels}
           initialFiltersOpen={false}
-          onBack={onBack}
+          onBack={handleBack}
         />
         <article>
             <div className="p-5 sm:p-8">
@@ -827,6 +896,9 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
         gemTitle={gem.title}
         gemDescription={rawDescription || rawSummary || ''}
         userId={currentUserId}
+        open={isChatOpen}
+        onClose={handleCloseChat}
+        onOpen={handleOpenChat}
       />
       <AdminConfirmationModal
         isOpen={deleteModalOpen}

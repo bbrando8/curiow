@@ -23,6 +23,9 @@ interface SectionQuestionsChatProps {
   gemDescription?: string; // nuovo: per body description
   userId?: string; // nuovo per creare sessione su Firestore
   gemImageUrl?: string; // nuovo: thumbnail
+  open?: boolean; // stato controllato
+  onClose?: () => void; // callback chiusura
+  onOpen?: () => void; // callback apertura
 }
 
 interface ChatMessage { id: string; question: string; answer?: string; loading: boolean; error?: string; origin: 'suggested' | 'custom'; element?: { name: string; index?: number; title?: string|null; test?: string|null }; followUps?: string[]; historyId?: string; createdAt?: Date; }
@@ -50,9 +53,14 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   gemTitle,
   gemDescription,
   userId,
-  gemImageUrl
+  gemImageUrl,
+  open: controlledOpen,
+  onClose,
+  onOpen
 }) => {
-  const [open, setOpen] = useState(false);
+  // RIMOSSO: stato locale open
+  // const [open, setOpen] = useState(false);
+  const open = controlledOpen ?? false;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [customInput, setCustomInput] = useState('');
   const [dynamicSuggestions, setDynamicSuggestions] = useState<SectionQuestionData[]>([]);
@@ -190,7 +198,8 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
       const detail = (ev as CustomEvent).detail || {};
       const sug: SectionQuestionData[] = (detail.questions || []).filter(q => q.element?.name !== 'general');
       setDynamicSuggestions(sug);
-      setOpen(true);
+      // RIMOSSO: apertura locale, ora gestita dal parent
+      // setOpen(true);
     };
     window.addEventListener('curiow-chat-open', handler as EventListener);
     return () => window.removeEventListener('curiow-chat-open', handler as EventListener);
@@ -215,7 +224,8 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
       if (!sessionId) return;
       sessionIdRef.current = sessionId;
       setMessages([]);
-      setOpen(true);
+      // RIMOSSO: apertura locale, ora gestita dal parent
+      // setOpen(true);
       window.dispatchEvent(new CustomEvent('curiow-chat-current-session', { detail: { sessionId } }));
 
       if (userId) {
@@ -243,7 +253,8 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
       }
       setHideInitialSuggestions(false);
       setHasExistingHistory(false);
-      setOpen(true);
+      // RIMOSSO: apertura locale, ora gestita dal parent
+      // setOpen(true);
       // RIMOSSO: focus automatico su input
       // setTimeout(() => {
       //   const input = document.getElementById('curiow-chat-input');
@@ -275,7 +286,8 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
         console.log('[chat] auto-firing question', q.testo);
         ask(q.testo, 'suggested', q.id, q.element);
         autoFiredRef.current = autoQuestionId;
-        setOpen(true);
+        // RIMOSSO: apertura locale, ora gestita dal parent
+        // setOpen(true);
       }
     }
   }, [autoQuestionId, questions]);
@@ -286,7 +298,8 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
       console.log('[chat] auto-firing custom text', autoCustomQuestionText);
       ask(autoCustomQuestionText, 'custom');
       autoFiredRef.current = autoCustomQuestionText;
-      setOpen(true);
+      // RIMOSSO: apertura locale, ora gestita dal parent
+      // setOpen(true);
     }
   }, [autoCustomQuestionText]);
 
@@ -364,14 +377,14 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
   return (
     <div className={`curiow-section-questions-chat ${open ? 'open' : ''}`}>
       {!hideTrigger && (
-        <div className="curiow-trigger" onClick={() => setOpen(true)}>
+        <div className="curiow-trigger" onClick={() => onOpen && onOpen()}>
           <SparklesIcon />
           <span>Fai una domanda</span>
         </div>
       )}
 
       {open && (
-        <div className="curiow-overlay" onClick={() => setOpen(false)}>
+        <div className="curiow-overlay" onClick={() => onClose && onClose()}>
           <div className="curiow-chat-container" onClick={e => e.stopPropagation()}>
             <div className="curiow-header">
               <div className="curiow-header-left">
@@ -380,7 +393,7 @@ const SectionQuestionsChat: React.FC<SectionQuestionsChatProps> = ({
                 )}
                 <div className="curiow-title">{gemTitle || 'Chat'}</div>
               </div>
-              <button className="curiow-close" onClick={() => setOpen(false)}>×</button>
+              <button className="curiow-close" onClick={() => onClose && onClose()}>×</button>
             </div>
 
             <div className="curiow-content">
