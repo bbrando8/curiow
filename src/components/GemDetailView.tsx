@@ -160,13 +160,17 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
 
   useEffect(()=>{
     let mounted = true;
-    fetchGeneratedQuestionsByGem(gem.id).then(qs=>{ if(mounted){ setGeneratedQuestions(qs); } }).catch(e=>console.error('Err fetch questions', e));
+    fetchGeneratedQuestionsByGem(gem.id).then(qs=>{
+      if(mounted){
+        setGeneratedQuestions(qs);
+      }
+    }).catch(e=>console.error('Err fetch questions', e));
     return ()=>{ mounted=false; };
   },[gem.id]);
 
   // Funzioni domande per sezione
   const getSectionQuestions = (section: string, stepIndex?: number) => {
-    return generatedQuestions.filter(q => q.section === section && (section !== 'step' || q.stepIndex === stepIndex)).slice(0,3);
+    return generatedQuestions.filter(q => q.section === section && (section !== 'step' || q.index === stepIndex)).slice(0,3);
   };
   const generalQuestions = generatedQuestions.filter(q => q.section === 'general').slice(0,3);
 

@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "curiow-432ed"
-  }
+    "default": "curiow-432ed",
+    "curiow": "curiow-432ed"
+  },
+  "targets": {},
+  "etags": {}
 }

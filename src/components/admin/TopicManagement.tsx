@@ -724,6 +724,34 @@ const TopicManagement: React.FC<TopicManagementProps> = ({ currentUser, onBack }
         </div>
       )}
 
+      {/* Paginazione */}
+      {totalPages > 1 && (
+        <div className="px-6 py-3 border-t border-gray-200 flex justify-between items-center mt-4">
+          <div className="text-sm text-gray-700">
+            Mostrando {indexOfFirstTopic + 1}-{Math.min(indexOfLastTopic, filteredTopics.length)} di {filteredTopics.length} argomenti
+          </div>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setCurrentPage(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Precedente
+            </button>
+            <span className="px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded-md">
+              {currentPage} di {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Successiva
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Modal Creazione/Modifica */}
       {(showCreateModal || editingTopic) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">

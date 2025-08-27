@@ -20,6 +20,7 @@ service cloud.firestore {
     // Regole per le gemme (lettura pubblica, scrittura per admin)
     match /gems/{gemId} {
       allow read: if true; // Lettura pubblica
+      allow update, delete: if isAdmin();
       allow write: if request.auth != null &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions.canCreateGems == true;
@@ -28,12 +29,14 @@ service cloud.firestore {
       match /userQuestions/{questionId} {
         allow read: if true;
         allow write: if request.auth != null;
+        allow update, delete: if isAdmin();
       }
     }
 
     // Regole per i canali (lettura pubblica)
     match /channels/{channelId} {
       allow read: if true;
+      allow update, delete: if isAdmin();
       allow write: if request.auth != null &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
@@ -42,6 +45,7 @@ service cloud.firestore {
     // Regole per i suggerimenti di argomenti (vecchia collection camelCase mantenuta per retrocompatibilità se esiste)
     match /topicSuggestions/{suggestionId} {
       allow read, write: if request.auth != null; // legacy
+      allow update, delete: if isAdmin();
     }
 
     // Regole per i suggerimenti di argomenti (collection effettiva usata nel codice: topic_suggestions)
@@ -64,54 +68,8 @@ service cloud.firestore {
         resource.data.userId == request.auth.uid;
       allow update, delete: if request.auth != null &&
         resource.data.userId == request.auth.uid;
-    }
-
-    // Regole per le domande generate dall'AI
-    match /questions/{questionId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
-    // Regole per i feedback degli utenti
-    match /feedback_tester/{feedbackId} {
-      allow create: if request.auth != null &&
-        request.resource.data.userId == request.auth.uid;
-      allow read, write: if request.auth != null &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-      allow read: if request.auth != null &&
-        resource.data.userId == request.auth.uid;
-    }
-
-    // ===== REGOLE PER LE NUOVE LISTE =====
-
-    // Regole per le liste
-    match /lists/{listId} {
-      allow read, write: if request.auth != null &&
-        resource.data.createdBy == request.auth.uid;
-      allow create: if request.auth != null;
-      allow read: if request.auth != null && resource.data.isPublic == true;
-    }
-
-    // Regole per i membri delle liste
-    match /list_members/{memberId} {
-      allow read, write: if request.auth != null &&
-        resource.data.userId == request.auth.uid;
-      allow read, write: if request.auth != null &&
-        exists(/databases/$(database)/documents/lists/$(resource.data.listId)) &&
-        get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.createdBy == request.auth.uid;
-    }
-
-    // Regole per gli elementi delle liste
-    match /list_items/{itemId} {
-      allow read, write: if request.auth != null &&
-        exists(/databases/$(database)/documents/lists/$(resource.data.listId)) &&
-        get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.createdBy == request.auth.uid;
-      allow read: if request.auth != null &&
-        exists(/databases/$(database)/documents/lists/$(resource.data.listId)) &&
-        get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.isPublic == true;
+      // Permessi admin
+      allow get, list, update, delete: if isAdmin();
     }
 
     // Regole per la cronologia delle chat di approfondimento
@@ -122,6 +80,61 @@ service cloud.firestore {
         resource.data.userId == request.auth.uid;
       allow update, delete: if request.auth != null &&
         resource.data.userId == request.auth.uid;
+      // Permessi admin
+      allow get, list, update, delete: if isAdmin();
+    }
+
+    // Regole per le domande generate dall'AI
+    match /questions/{questionId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    // Regole per i feedback degli utenti
+    match /feedback_tester/{feedbackId} {
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      allow read, write: if request.auth != null &&
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || isAdmin());
+      allow read: if request.auth != null &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    // ===== REGOLE PER LE NUOVE LISTE =====
+
+    // Regole per le liste
+    match /lists/{listId} {
+      allow read, write: if request.auth != null &&
+        resource.data.createdBy == request.auth.uid;
+      allow create: if request.auth != null;
+      allow read: if request.auth != null && resource.data.isPublic == true;
+      allow update, delete: if isAdmin();
+    }
+
+    // Regole per i membri delle liste
+    match /list_members/{memberId} {
+      allow read, write: if request.auth != null &&
+        resource.data.userId == request.auth.uid;
+      allow read, write: if request.auth != null &&
+        exists(/databases/$(database)/documents/lists/$(resource.data.listId)) &&
+        get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.createdBy == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Regole per gli elementi delle liste
+    match /list_items/{itemId} {
+      allow read, write: if request.auth != null &&
+        exists(/databases/$(database)/documents/lists/$(resource.data.listId)) &&
+        get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.createdBy == request.auth.uid;
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/lists/$(resource.data.listId)) &&
+        get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.isPublic == true;
+      allow update, delete: if isAdmin();
     }
   }
 }

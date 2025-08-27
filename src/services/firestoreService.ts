@@ -464,12 +464,13 @@ export const searchGems = async (searchTerm: string): Promise<(Gem & { id: strin
     const allGems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Gem & { id: string }));
 
     return allGems.filter(gem => {
+      const title = typeof gem.title === 'string' ? gem.title : '';
       const desc = (gem as any).content?.description || (gem as any).description || '';
-      const tags = gem.tags || [];
+      const tags = Array.isArray(gem.tags) ? gem.tags : [];
       return (
-        gem.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         desc.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+        tags.some(tag => typeof tag === 'string' && tag.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     });
   } catch (error) {

@@ -374,10 +374,10 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
       let comparison = 0;
       switch (sortBy) {
         case 'title':
-          comparison = a.title.localeCompare(b.title);
+          comparison = (a.title || '').localeCompare(b.title || '');
           break;
         case 'topic':
-          comparison = a.topic.localeCompare(b.topic);
+          comparison = (a.topic || '').localeCompare(b.topic || '');
           break;
         default:
           comparison = 0;
