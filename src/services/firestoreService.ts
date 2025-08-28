@@ -819,3 +819,51 @@ export const fetchGemsFiltered = async (
     return { gems: [] };
   }
 };
+
+// --- Token Counter Operations ---
+export interface TokenCounter {
+  createdAt: any;
+  gemId: string;
+  inputToken: number;
+  model: string;
+  outputToken: number;
+  subtype: string;
+  type: string;
+  userId: string;
+  id?: string;
+}
+
+export const fetchTokenCounter = async ({
+  startDate,
+  endDate,
+  model,
+  type,
+  subtype,
+  userId
+}: {
+  startDate?: Date;
+  endDate?: Date;
+  model?: string;
+  type?: string;
+  subtype?: string;
+  userId?: string;
+}): Promise<TokenCounter[]> => {
+  try {
+    let q = query(collection(db, 'token_counter'));
+    const filters = [];
+    if (startDate) filters.push(where('createdAt', '>=', startDate));
+    if (endDate) filters.push(where('createdAt', '<=', endDate));
+    if (model) filters.push(where('model', '==', model));
+    if (type) filters.push(where('type', '==', type));
+    if (subtype) filters.push(where('subtype', '==', subtype));
+    if (userId) filters.push(where('userId', '==', userId));
+    if (filters.length > 0) {
+      q = query(collection(db, 'token_counter'), ...filters);
+    }
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TokenCounter));
+  } catch (error) {
+    console.error('Error fetching token_counter:', error);
+    return [];
+  }
+};

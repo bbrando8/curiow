@@ -22,6 +22,8 @@ import { SparklesIcon } from './components/icons';
 import SaveToListModal from './components/SaveToListModal';
 import AdminConfirmationModal from './components/admin/AdminConfirmationModal';
 import GemSearchPage from './components/GemSearchPage';
+import TokenCounterManagement from './components/admin/TokenCounterManagement';
+import AdminLayout from './components/admin/AdminLayout';
 import { Routes, Route, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom';
 // Import admin utils in development
 import './utils/adminUtils';
@@ -853,6 +855,41 @@ const App: React.FC = () => {
     return children;
   };
 
+  // Componenti content per routing annidato admin
+  const AdminGemsContent = () => {
+    const safeCurrentUser = createSafeCurrentUser();
+    if (!safeCurrentUser) return <Navigate to="/" replace />;
+    return <GemsManagement currentUser={safeCurrentUser} onBack={() => navigate(-1)} />;
+  };
+
+  const AdminUsersContent = () => {
+    const safeCurrentUser = createSafeCurrentUser();
+    if (!safeCurrentUser) return <Navigate to="/" replace />;
+    return <UserManagement currentUser={safeCurrentUser} onBack={() => navigate(-1)} />;
+  };
+
+  const AdminTopicsContent = () => {
+    const safeCurrentUser = createSafeCurrentUser();
+    if (!safeCurrentUser) return <Navigate to="/" replace />;
+    return <TopicManagement currentUser={safeCurrentUser} onBack={() => navigate(-1)} />;
+  };
+
+  const AdminChannelsContent = () => {
+    const safeCurrentUser = createSafeCurrentUser();
+    if (!safeCurrentUser) return <Navigate to="/" replace />;
+    return <ChannelManagement currentUser={safeCurrentUser} onBack={() => navigate(-1)} />;
+  };
+
+  const AdminFeedbackContent = () => {
+    return <FeedbackManagement onBack={() => navigate(-1)} />;
+  };
+
+  const AdminTokenCounterContent = () => {
+    const safeCurrentUser = createSafeCurrentUser();
+    if (!safeCurrentUser) return <Navigate to="/" replace />;
+    return <TokenCounterManagement currentUser={safeCurrentUser} onBack={() => navigate(-1)} />;
+  };
+
   // Helper per creare currentUser sicuro
   const createSafeCurrentUser = () => {
     if (!user || !firebaseUser) return null;
@@ -865,7 +902,7 @@ const App: React.FC = () => {
 
     return (
       <RequireAdmin>
-        <GemsManagement currentUser={safeCurrentUser} onBack={() => navigate(-1)} />
+        <AdminGemsContent />
       </RequireAdmin>
     );
   };
@@ -876,7 +913,7 @@ const App: React.FC = () => {
 
     return (
       <RequireAdmin>
-        <UserManagement currentUser={safeCurrentUser} onBack={() => navigate(-1)} />
+        <AdminUsersContent />
       </RequireAdmin>
     );
   };
@@ -887,7 +924,7 @@ const App: React.FC = () => {
 
     return (
       <RequireAdmin>
-        <TopicManagement currentUser={safeCurrentUser} onBack={() => navigate(-1)} />
+        <AdminTopicsContent />
       </RequireAdmin>
     );
   };
@@ -898,16 +935,26 @@ const App: React.FC = () => {
 
     return (
       <RequireAdmin>
-        <ChannelManagement currentUser={safeCurrentUser} onBack={() => navigate(-1)} />
+        <AdminChannelsContent />
       </RequireAdmin>
     );
   };
 
   const AdminFeedbackPage = () => (
     <RequireAdmin>
-      <FeedbackManagement onBack={() => navigate(-1)} />
+      <AdminFeedbackContent />
     </RequireAdmin>
   );
+
+  const AdminTokenCounterPage = () => {
+    const safeCurrentUser = createSafeCurrentUser();
+    if (!safeCurrentUser) return <Navigate to="/" replace />;
+    return (
+      <RequireAdmin>
+        <AdminTokenCounterContent />
+      </RequireAdmin>
+    );
+  };
 
   // Scroll lock durante apertura LoginModal
   useEffect(() => {
@@ -960,12 +1007,15 @@ const App: React.FC = () => {
             onSaveRequest={handleSaveRequest}
             onRemoveRequest={handleRemoveRequest}
           />} />
-          <Route path="/admin" element={<Navigate to="/admin/gems" replace />} />
-          <Route path="/admin/gems" element={<AdminGemsPage />} />
-          <Route path="/admin/users" element={<AdminUsersPage />} />
-          <Route path="/admin/topics" element={<AdminTopicsPage />} />
-          <Route path="/admin/channels" element={<AdminChannelsPage />} />
-          <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
+          <Route path="/admin" element={<AdminLayout currentUser={createSafeCurrentUser()} />}>
+            <Route index element={<Navigate to="/admin/gems" replace />} />
+            <Route path="gems" element={<AdminGemsPage />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="topics" element={<AdminTopicsPage />} />
+            <Route path="channels" element={<AdminChannelsPage />} />
+            <Route path="feedback" element={<AdminFeedbackPage />} />
+            <Route path="token-counter" element={<AdminTokenCounterPage />} />
+          </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
 
