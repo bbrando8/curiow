@@ -12,9 +12,10 @@ interface GemCardProps {
   onSelect: (gemId: string) => void;
   onLoginRequest: () => void;
   onView?: () => void; // Nuova prop per tracciare le visualizzazioni
+  onTagClick?: (tag: string) => void; // opzionale: click su tag per filtrare/ricercare
 }
 
-const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRequest, onRemoveRequest, onSelect, onLoginRequest, onView }) => {
+const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRequest, onRemoveRequest, onSelect, onLoginRequest, onView, onTagClick }) => {
 
   const [showShareBar, setShowShareBar] = React.useState(false);
   const handleCardClick = () => {
@@ -222,9 +223,19 @@ const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRe
             <div className="mt-3 flex flex-wrap gap-2 items-center">
                 <TagIcon className="w-4 h-4 text-slate-400 dark:text-slate-500"/>
                 {gem.tags.map(tag => (
-                    <span key={tag} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full text-xs font-medium">
+                    onTagClick ? (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={(e)=>{ e.stopPropagation(); onTagClick(tag); }}
+                        className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 hover:bg-indigo-100 dark:hover:bg-indigo-700 text-slate-600 dark:text-slate-300 hover:text-indigo-700 dark:hover:text-indigo-200 rounded-full text-xs font-medium transition-colors"
+                        aria-label={`Filtra per tag ${tag}`}
+                      >{tag}</button>
+                    ) : (
+                      <span key={tag} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full text-xs font-medium">
                         {tag}
-                    </span>
+                      </span>
+                    )
                 ))}
             </div>
         )}

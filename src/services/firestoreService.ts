@@ -765,3 +765,57 @@ export const getSessionTitle = async (sessionId: string, userId: string, gemId: 
   }
 };
 
+// --- Funzione di ricerca gems filtrata su Firestore ---
+import { QueryDocumentSnapshot } from 'firebase/firestore';
+
+export const fetchGemsFiltered = async (
+  searchTerm: string,
+  activeTags: string[],
+  pageSize: number = 20,
+  lastDoc?: QueryDocumentSnapshot<DocumentData>
+): Promise<{ gems: Gem[], lastVisible?: QueryDocumentSnapshot<DocumentData> }> => {
+  try {
+    const gemsCollection = collection(db, 'gems');
+    let q;
+    // Se ci sono tag attivi, usa array-contains per il primo tag (Firestore non supporta array-contains-multiple)
+    if (activeTags.length > 0) {
+      q = query(gemsCollection, where('tags', 'array-contains', activeTags[0]), orderBy('title', 'asc'), limit(pageSize));
+    } else {
+      q = query(gemsCollection, orderBy('title', 'asc'), limit(pageSize));
+    }
+    if (lastDoc) {
+      q = query(q, startAfter(lastDoc), limit(pageSize));
+    }
+    const snap = await getDocs(q);
+    let gems = snap.docs.map(doc => ({ id: doc.id, ...doc.data(), userQuestions: [] } as Gem));
+    // Filtro lato client per searchTerm e per tutti i tag attivi (se >1)
+    if (activeTags.length > 1) {
+      const normTags = activeTags.map(t => t.trim().toLowerCase());
+      gems = gems.filter(gem => {
+        const gemTagsArr: string[] = Array.isArray(gem.tags) ? gem.tags : [];
+        const gemNormSet = new Set(gemTagsArr.map(t => String(t || '').trim().toLowerCase()));
+        return normTags.every(t => gemNormSet.has(t));
+      });
+    }
+    if (searchTerm) {
+      const term = searchTerm.trim().toLowerCase();
+      gems = gems.filter(gem => {
+        const title = (gem.title || '').toLowerCase();
+        const desc = (((gem as any).content?.description || gem.description || '') as string).toLowerCase();
+        const tags = Array.isArray(gem.tags) ? gem.tags : [];
+        if (title.includes(term) || desc.includes(term)) return true;
+        for (const tag of tags) {
+          if (typeof tag === 'string' && tag.toLowerCase().includes(term)) return true;
+        }
+        return false;
+      });
+    }
+    return {
+      gems,
+      lastVisible: snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : undefined
+    };
+  } catch (error) {
+    console.error('Error fetching filtered gems:', error);
+    return { gems: [] };
+  }
+};

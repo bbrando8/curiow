@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ListWithItems, Gem } from '../types';
 import { ChevronLeftIcon, PlusCircleIcon } from './icons';
 import GemCard from './GemCard';
+import { useNavigate } from 'react-router-dom';
 
 interface SavedViewProps {
     allGems: Gem[];
@@ -19,6 +20,7 @@ const SavedView: React.FC<SavedViewProps> = ({ allGems, allFavoriteIds, savedLis
     const [newListName, setNewListName] = useState('');
     const userLists = savedLists.filter(l => l.id !== 'default');
     const [selectedListId, setSelectedListId] = useState<string>('all');
+    const navigate = useNavigate();
 
     const handleCreateList = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -105,8 +107,10 @@ const SavedView: React.FC<SavedViewProps> = ({ allGems, allFavoriteIds, savedLis
                                     isLoggedIn={true}
                                     isFavorite={allFavoriteIds.includes(gem.id)}
                                     onSaveRequest={onToggleFavorite} /* Using onToggleFavorite here to just remove from all lists */
+                                    onRemoveRequest={onToggleFavorite}
                                     onSelect={onSelectGem}
                                     onLoginRequest={onLoginRequest}
+                                    onTagClick={(t)=> navigate(`/gem-search/${encodeURIComponent(t)}`)}
                                 />
                             ))}
                         </div>

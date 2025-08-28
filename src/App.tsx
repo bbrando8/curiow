@@ -21,6 +21,7 @@ import OnboardingModal from './components/OnboardingModal';
 import { SparklesIcon } from './components/icons';
 import SaveToListModal from './components/SaveToListModal';
 import AdminConfirmationModal from './components/admin/AdminConfirmationModal';
+import GemSearchPage from './components/GemSearchPage';
 import { Routes, Route, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom';
 // Import admin utils in development
 import './utils/adminUtils';
@@ -491,10 +492,21 @@ const App: React.FC = () => {
   };
 
   // Funzioni mancanti reintrodotte
+  const navigateToSearch = (params: { term?: string; tags?: string[] }) => {
+    const { term, tags } = params;
+    let path = '/gem-search';
+    if (tags && tags.length) {
+      path += '/' + encodeURIComponent(tags.join(','));
+    }
+    if (term) {
+      path += `?q=${encodeURIComponent(term)}`;
+    }
+    navigate(path);
+  };
+
   const handleSelectTag = (tag: string) => {
-    setFilter({ type: 'tag', value: tag });
-    // opzionale: torna al feed filtrato se non ci si trova già
-    if (!location.pathname.startsWith('/gem/')) return;
+    // naviga a pagina ricerca con il tag
+    navigateToSearch({ tags: [tag] });
   };
 
   const handleBackToFeed = () => {
@@ -569,7 +581,7 @@ const App: React.FC = () => {
 
   // Effetto per l'Intersection Observer della modale di onboarding
   useEffect(() => {
-    // Attiva l'observer solo se l'utente non è loggato e non ha già visto la modale in questa sessione
+    // Attiva l'observer solo se l'utente non �� loggato e non ha già visto la modale in questa sessione
     if (firebaseUser || hasSeenOnboarding || isLoading) {
       return;
     }
@@ -631,6 +643,7 @@ const App: React.FC = () => {
         onNavigate={handleNavigate}
         channels={channels}
         showFilters={true}
+        onSearch={(term)=> navigateToSearch({ term })}
       />
       <main className="max-w-xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {isLoading && gems.length === 0 ? (
@@ -665,6 +678,7 @@ const App: React.FC = () => {
                     onRemoveRequest={handleRemoveRequest}
                     onSelect={handleSelectGem}
                     onLoginRequest={handleLoginRequest}
+                    onTagClick={(t)=>handleSelectTag(t)}
                   />
                 )}
 
@@ -823,7 +837,7 @@ const App: React.FC = () => {
       onSaveRequest={handleSaveRequest}
       onRemoveRequest={handleRemoveRequest}
       onAddUserQuestion={handleAddUserQuestion}
-      onTagSelect={handleSelectTag}
+      onTagSelect={(t)=>handleSelectTag(t)}
       onLogin={() => setShowLoginModal(true)}
       onLogout={handleLogout}
       onNavigate={handleNavigate}
@@ -928,6 +942,24 @@ const App: React.FC = () => {
           <Route path="/saved" element={<SavedPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/gem/:id" element={<GemDetailPage />} />
+          <Route path="/gem-search" element={<GemSearchPage
+            isLoggedIn={!!firebaseUser}
+            user={user}
+            allFavoriteIds={allFavoriteIds}
+            onLogin={() => setShowLoginModal(true)}
+            onSelectGem={handleSelectGem}
+            onSaveRequest={handleSaveRequest}
+            onRemoveRequest={handleRemoveRequest}
+          />} />
+          <Route path="/gem-search/:tagParam" element={<GemSearchPage
+            isLoggedIn={!!firebaseUser}
+            user={user}
+            allFavoriteIds={allFavoriteIds}
+            onLogin={() => setShowLoginModal(true)}
+            onSelectGem={handleSelectGem}
+            onSaveRequest={handleSaveRequest}
+            onRemoveRequest={handleRemoveRequest}
+          />} />
           <Route path="/admin" element={<Navigate to="/admin/gems" replace />} />
           <Route path="/admin/gems" element={<AdminGemsPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />

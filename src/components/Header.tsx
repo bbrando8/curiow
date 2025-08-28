@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Filter, Channel } from '../types';
 import { SparklesIcon, UserCircleIcon, BookmarkSquareIcon, Cog6ToothIcon, ChevronDownIcon, ChevronLeftIcon } from './icons';
+import { MagnifyingGlassIcon } from './icons';
 import { useUserPermissions } from '../services/roleService';
 
 interface HeaderProps {
@@ -15,6 +16,7 @@ interface HeaderProps {
   channels?: Channel[];
   initialFiltersOpen?: boolean; // ignorato: menu parte sempre chiuso ora
   onBack?: () => void; // nuovo per GemDetailView
+  onSearch?: (term: string) => void; // nuovo: callback ricerca
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -28,11 +30,15 @@ const Header: React.FC<HeaderProps> = ({
   onSelectFilter,
   channels,
   onBack,
+  onSearch
   // initialFiltersOpen // non usato
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [fadeState, setFadeState] = useState<'closed' | 'opening' | 'open' | 'closing'>('closed');
+  const [searchOpen, setSearchOpen] = useState(false); // stato apertura ricerca
+  const [searchValue, setSearchValue] = useState('');
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const permissions = useUserPermissions(user);
@@ -78,10 +84,21 @@ const Header: React.FC<HeaderProps> = ({
 
   // Chiudi con ESC
   useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setShowProfileMenu(false); closeFilters(); } };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setShowProfileMenu(false); closeFilters(); setSearchOpen(false);} };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, []);
+
+  // focus input quando apre
+  useEffect(()=>{ if(searchOpen){ requestAnimationFrame(()=> searchInputRef.current?.focus()); } },[searchOpen]);
+
+  const submitSearch = () => {
+    const term = searchValue.trim();
+    if (term && onSearch) {
+      onSearch(term);
+    }
+    setSearchOpen(false);
+  };
 
   const handleMenuItemClick = (view: 'profile' | 'dashboard' | 'saved' | 'feed') => {
     setShowProfileMenu(false);
@@ -147,6 +164,35 @@ const Header: React.FC<HeaderProps> = ({
             </div>
             {/* Azioni utente */}
             <div className="flex items-center space-x-3">
+              {/* Pulsante ricerca */}
+              <div className="relative">
+                <button
+                  onClick={()=> setSearchOpen(o=>!o)}
+                  aria-label="Apri ricerca"
+                  className={`p-2 rounded-full transition-colors ${searchOpen ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-800 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                >
+                  <MagnifyingGlassIcon className="w-6 h-6" />
+                </button>
+                {searchOpen && (
+                  <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg p-3 z-50 animate-fade-in">
+                    <form onSubmit={(e)=>{ e.preventDefault(); submitSearch(); }} className="flex items-center gap-2">
+                      <MagnifyingGlassIcon className="w-5 h-5 text-slate-400" />
+                      <input
+                        ref={searchInputRef}
+                        value={searchValue}
+                        onChange={e=>setSearchValue(e.target.value)}
+                        placeholder="Cerca gem..."
+                        className="flex-1 bg-transparent text-sm focus:outline-none placeholder-slate-400 dark:placeholder-slate-500 text-slate-700 dark:text-slate-200"
+                        aria-label="Campo ricerca rapido"
+                      />
+                      {searchValue && (
+                        <button type="button" onClick={()=>setSearchValue('')} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">×</button>
+                      )}
+                      <button type="submit" className="px-2 py-1 text-xs font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">Vai</button>
+                    </form>
+                  </div>
+                )}
+              </div>
               {isLoggedIn ? (
                 <div className="relative" ref={menuRef}>
                   <button
