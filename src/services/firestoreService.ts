@@ -19,7 +19,7 @@ import {
   DocumentData
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Gem, Channel, User, SavedList, UserQuestion, UserRole, TopicSuggestion, ListWithItems } from '../types';
+import { Gem, Channel, User, SavedList, UserQuestion, UserRole, TopicSuggestion, ListWithItems, LLMModel } from '../types';
 import { getDefaultPermissions } from './roleService';
 import * as listService from './listService';
 
@@ -865,5 +865,55 @@ export const fetchTokenCounter = async ({
   } catch (error) {
     console.error('Error fetching token_counter:', error);
     return [];
+  }
+};
+
+// Funzioni per gestire i modelli LLM e i loro costi
+export const fetchLLMModels = async (): Promise<LLMModel[]> => {
+  try {
+    const modelsCollection = collection(db, 'llm_models');
+    const q = query(modelsCollection, orderBy('name'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LLMModel));
+  } catch (error) {
+    console.error('Error fetching LLM models:', error);
+    return [];
+  }
+};
+
+export const createLLMModel = async (model: Omit<LLMModel, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
+  try {
+    const docRef = await addDoc(collection(db, 'llm_models'), {
+      ...model,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isActive: true
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating LLM model:', error);
+    throw error;
+  }
+};
+
+export const updateLLMModel = async (id: string, updates: Partial<LLMModel>): Promise<void> => {
+  try {
+    const docRef = doc(db, 'llm_models', id);
+    await updateDoc(docRef, {
+      ...updates,
+      updatedAt: new Date()
+    });
+  } catch (error) {
+    console.error('Error updating LLM model:', error);
+    throw error;
+  }
+};
+
+export const deleteLLMModel = async (id: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'llm_models', id));
+  } catch (error) {
+    console.error('Error deleting LLM model:', error);
+    throw error;
   }
 };

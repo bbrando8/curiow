@@ -142,5 +142,11 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write, update, delete: if isAdmin();
     }
+
+    // Regole per la collection llm_models (lettura admin, scrittura admin)
+    match /llm_models/{modelId} {
+      allow read: if isAdmin();
+      allow write, update, delete: if isAdmin();
+    }
   }
 }

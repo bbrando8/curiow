@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import AdminPageLayout from './AdminPageLayout';
-import { fetchTokenCounter, TokenCounter } from '../../services/firestoreService';
+import { fetchTokenCounter, fetchLLMModels, TokenCounter, LLMModel } from '../../services/firestoreService';
 import { useUserPermissions } from '../../services/roleService';
 
 interface TokenCounterManagementProps {
@@ -25,11 +25,37 @@ const TokenCounterManagement: React.FC<TokenCounterManagementProps> = ({ current
     userId: ''
   });
   const [data, setData] = useState<TokenCounter[]>([]);
+  const [llmModels, setLlmModels] = useState<LLMModel[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const permissions = useUserPermissions(currentUser);
+
+  // Cache per i modelli LLM - evita di ricaricarli ad ogni calcolo
+  const modelsMapRef = React.useRef<Map<string, LLMModel>>(new Map());
+
+  // Carica i modelli LLM una volta all'inizio
+  useEffect(() => {
+    const loadLLMModels = async () => {
+      if (!currentUser || currentUser.role !== 'admin') return;
+      try {
+        const models = await fetchLLMModels();
+
+        // Popola la cache
+        const modelsMap = new Map<string, LLMModel>();
+        models.forEach(model => {
+          modelsMap.set(model.name, model);
+        });
+        modelsMapRef.current = modelsMap;
+
+        setLlmModels(models);
+      } catch (error) {
+        console.error('Error loading LLM models:', error);
+      }
+    };
+    loadLLMModels();
+  }, [currentUser]);
 
   useEffect(() => {
     if (!currentUser || currentUser.role !== 'admin') return;
@@ -49,45 +75,89 @@ const TokenCounterManagement: React.FC<TokenCounterManagementProps> = ({ current
     loadData();
   }, [filters, currentUser]);
 
-  // Calcoli aggregati
+  // Funzione helper per calcolare i costi con cache
+  const calculateCost = (inputTokens: number, outputTokens: number, modelName: string): { inputCost: number; outputCost: number; totalCost: number } => {
+    // Usa la cache per ottenere il modello
+    const model = modelsMapRef.current.get(modelName);
+
+    if (!model) {
+      return { inputCost: 0, outputCost: 0, totalCost: 0 };
+    }
+
+    // Usa i nomi corretti dei campi dal database
+    const inputCostPerMillion = model.inputCostPerMilion;  // Nota: "Milion" non "Million"
+    const outputCostPerMillion = model.outputCostPerMilion; // Nota: "Milion" non "Million"
+
+    // Validazione che i valori siano numeri
+    if (typeof inputCostPerMillion !== 'number' || typeof outputCostPerMillion !== 'number') {
+      return { inputCost: 0, outputCost: 0, totalCost: 0 };
+    }
+
+    const inputCost = (inputTokens / 1_000_000) * inputCostPerMillion;
+    const outputCost = (outputTokens / 1_000_000) * outputCostPerMillion;
+    const totalCost = inputCost + outputCost;
+
+    return { inputCost, outputCost, totalCost };
+  };
+
+  // Calcoli aggregati con costi
   const aggregates = useMemo(() => {
     const totalInput = data.reduce((sum, d) => sum + (d.inputToken || 0), 0);
     const totalOutput = data.reduce((sum, d) => sum + (d.outputToken || 0), 0);
     const totalTokens = totalInput + totalOutput;
 
-    // Grouping by model
+    // Calcolo costi totali
+    const totalCosts = data.reduce((acc, d) => {
+      const costs = calculateCost(d.inputToken || 0, d.outputToken || 0, d.model || '');
+      return {
+        inputCost: acc.inputCost + costs.inputCost,
+        outputCost: acc.outputCost + costs.outputCost,
+        totalCost: acc.totalCost + costs.totalCost
+      };
+    }, { inputCost: 0, outputCost: 0, totalCost: 0 });
+
+    // Grouping by model con costi
     const byModel = data.reduce((acc, d) => {
       const model = d.model || 'Unknown';
       if (!acc[model]) {
-        acc[model] = { input: 0, output: 0, count: 0 };
+        acc[model] = { input: 0, output: 0, count: 0, inputCost: 0, outputCost: 0, totalCost: 0 };
       }
+      const costs = calculateCost(d.inputToken || 0, d.outputToken || 0, d.model || '');
       acc[model].input += d.inputToken || 0;
       acc[model].output += d.outputToken || 0;
       acc[model].count += 1;
+      acc[model].inputCost += costs.inputCost;
+      acc[model].outputCost += costs.outputCost;
+      acc[model].totalCost += costs.totalCost;
       return acc;
-    }, {} as Record<string, { input: number; output: number; count: number }>);
+    }, {} as Record<string, { input: number; output: number; count: number; inputCost: number; outputCost: number; totalCost: number }>);
 
-    // Grouping by type
+    // Grouping by type con costi
     const byType = data.reduce((acc, d) => {
       const type = d.type || 'Unknown';
       if (!acc[type]) {
-        acc[type] = { input: 0, output: 0, count: 0 };
+        acc[type] = { input: 0, output: 0, count: 0, inputCost: 0, outputCost: 0, totalCost: 0 };
       }
+      const costs = calculateCost(d.inputToken || 0, d.outputToken || 0, d.model || '');
       acc[type].input += d.inputToken || 0;
       acc[type].output += d.outputToken || 0;
       acc[type].count += 1;
+      acc[type].inputCost += costs.inputCost;
+      acc[type].outputCost += costs.outputCost;
+      acc[type].totalCost += costs.totalCost;
       return acc;
-    }, {} as Record<string, { input: number; output: number; count: number }>);
+    }, {} as Record<string, { input: number; output: number; count: number; inputCost: number; outputCost: number; totalCost: number }>);
 
     return {
       totalInput,
       totalOutput,
       totalTokens,
       totalRequests: data.length,
+      totalCosts,
       byModel,
       byType
     };
-  }, [data]);
+  }, [data, llmModels]);
 
   // Gestione form filtri
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -141,6 +211,15 @@ const TokenCounterManagement: React.FC<TokenCounterManagementProps> = ({ current
     if (date.toDate) return date.toDate().toLocaleString('it-IT');
     if (date instanceof Date) return date.toLocaleString('it-IT');
     return String(date);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 6
+    }).format(amount);
   };
 
   return (
@@ -286,7 +365,7 @@ const TokenCounterManagement: React.FC<TokenCounterManagementProps> = ({ current
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center">
             <div className="flex-shrink-0">
@@ -311,6 +390,7 @@ const TokenCounterManagement: React.FC<TokenCounterManagementProps> = ({ current
             <div className="ml-4">
               <div className="text-sm font-medium text-gray-500">Token Input</div>
               <div className="text-2xl font-bold text-gray-900">{formatNumber(aggregates.totalInput)}</div>
+              <div className="text-xs text-green-600 font-medium">{formatCurrency(aggregates.totalCosts.inputCost)}</div>
             </div>
           </div>
         </div>
@@ -325,6 +405,7 @@ const TokenCounterManagement: React.FC<TokenCounterManagementProps> = ({ current
             <div className="ml-4">
               <div className="text-sm font-medium text-gray-500">Token Output</div>
               <div className="text-2xl font-bold text-gray-900">{formatNumber(aggregates.totalOutput)}</div>
+              <div className="text-xs text-purple-600 font-medium">{formatCurrency(aggregates.totalCosts.outputCost)}</div>
             </div>
           </div>
         </div>
@@ -342,6 +423,23 @@ const TokenCounterManagement: React.FC<TokenCounterManagementProps> = ({ current
             </div>
           </div>
         </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                <span className="text-red-600 font-semibold">💰</span>
+              </div>
+            </div>
+            <div className="ml-4">
+              <div className="text-sm font-medium text-gray-500">Costo Totale</div>
+              <div className="text-2xl font-bold text-gray-900">{formatCurrency(aggregates.totalCosts.totalCost)}</div>
+              <div className="text-xs text-gray-500">
+                In: {formatCurrency(aggregates.totalCosts.inputCost)} | Out: {formatCurrency(aggregates.totalCosts.outputCost)}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Summary by Model and Type */}
@@ -355,6 +453,7 @@ const TokenCounterManagement: React.FC<TokenCounterManagementProps> = ({ current
                 <div>
                   <div className="font-medium text-gray-900">{model}</div>
                   <div className="text-sm text-gray-500">{stats.count} richieste</div>
+                  <div className="text-xs font-medium text-green-600">{formatCurrency(stats.totalCost)}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-sm font-medium text-gray-900">
@@ -362,6 +461,9 @@ const TokenCounterManagement: React.FC<TokenCounterManagementProps> = ({ current
                   </div>
                   <div className="text-xs text-gray-500">
                     In: {formatNumber(stats.input)} | Out: {formatNumber(stats.output)}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {formatCurrency(stats.inputCost)} | {formatCurrency(stats.outputCost)}
                   </div>
                 </div>
               </div>
@@ -378,6 +480,7 @@ const TokenCounterManagement: React.FC<TokenCounterManagementProps> = ({ current
                 <div>
                   <div className="font-medium text-gray-900">{type}</div>
                   <div className="text-sm text-gray-500">{stats.count} richieste</div>
+                  <div className="text-xs font-medium text-green-600">{formatCurrency(stats.totalCost)}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-sm font-medium text-gray-900">
@@ -385,6 +488,9 @@ const TokenCounterManagement: React.FC<TokenCounterManagementProps> = ({ current
                   </div>
                   <div className="text-xs text-gray-500">
                     In: {formatNumber(stats.input)} | Out: {formatNumber(stats.output)}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {formatCurrency(stats.inputCost)} | {formatCurrency(stats.outputCost)}
                   </div>
                 </div>
               </div>
