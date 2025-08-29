@@ -458,7 +458,8 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
         apitype: 'create-text',
         argument: editingGem ? editingGem.title : formData.title,
         objective: formData.description || 'Obiettivo da definire',
-        channel: channel ? { name: channel.name, id: channel.id } : { name: '', id: formData.channelId }
+        channel: channel ? { name: channel.name, id: channel.id } : { name: '', id: formData.channelId },
+        gemId: editingGem ? editingGem.id : undefined
       };
       const data = await callCuriowApi(body);
       if (data.content?.description) {
@@ -492,7 +493,12 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
     setAiError(null);
     setAiLoading(l => ({ ...l, image: true }));
     try {
-      const data = await callCuriowApi({ apitype: 'create-image', description: formData.description });
+      const body = {
+        apitype: 'create-image',
+        description: formData.description,
+        gemId: editingGem ? editingGem.id : undefined
+      };
+      const data = await callCuriowApi(body);
       const img = data.secure_url || data.imageUrl || data.url || data.image || data.result || null;
       if (img) setPendingImageUrl(img);
     } catch (e: any) {
