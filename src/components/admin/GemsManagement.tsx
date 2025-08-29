@@ -93,6 +93,7 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
 
   const [pendingImageUrl, setPendingImageUrl] = useState<string | null>(null);
   const [structuredAIQuestions, setStructuredAIQuestions] = useState<StructuredAIQuestion[]>([]);
+  const [questionsCountByGemId, setQuestionsCountByGemId] = useState<Record<string, number>>({});
 
   const permissions = useUserPermissions(currentUser);
 
@@ -100,6 +101,22 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
     loadGems();
     loadChannels();
   }, []);
+
+  useEffect(() => {
+    async function fetchQuestionsCounts() {
+      const counts: Record<string, number> = {};
+      await Promise.all(gems.map(async (gem) => {
+        try {
+          const questions = await fetchGeneratedQuestionsByGem(gem.id);
+          counts[gem.id] = questions.length;
+        } catch {
+          counts[gem.id] = 0;
+        }
+      }));
+      setQuestionsCountByGemId(counts);
+    }
+    if (gems.length > 0) fetchQuestionsCounts();
+  }, [gems]);
 
   const loadGems = async () => {
     setLoading(true);
@@ -810,7 +827,7 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                                 </button>
                               </div>
                               <p className="text-sm text-gray-500">
-                                {gem.suggestedQuestions?.length || 0} domande suggerite
+                                {questionsCountByGemId[gem.id] ?? 0} domande suggerite
                               </p>
                             </div>
                           </div>
