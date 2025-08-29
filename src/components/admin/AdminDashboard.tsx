@@ -6,13 +6,14 @@ import TopicManagement from './TopicManagement';
 import FeedbackManagement from './FeedbackManagement';
 import ChannelManagement from './ChannelManagement';
 import GemsManagement from './GemsManagement';
+import TokenCounterManagement from './TokenCounterManagement';
 
 interface AdminDashboardProps {
   currentUser: User & { id: string } | null;
   onClose: () => void;
 }
 
-type DashboardView = 'users' | 'topics' | 'feedback' | 'channels' | 'gems';
+type DashboardView = 'users' | 'topics' | 'feedback' | 'channels' | 'gems' | 'tokenCounter';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose }) => {
   const [activeView, setActiveView] = useState<DashboardView>('gems');
@@ -59,6 +60,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose })
       allowedForAll: false,
       requiresAdmin: true,
     },
+    {
+      id: 'tokenCounter' as DashboardView,
+      label: 'Gestione Token LLM',
+      icon: '🔢',
+      description: 'Visualizza e filtra i costi token dei modelli LLM',
+      allowedForAll: false,
+      requiresAdmin: true,
+    },
   ];
 
   const visibleMenuItems = menuItems.filter(item =>
@@ -92,6 +101,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onClose })
       case 'gems':
         return permissions.isAdmin ? (
           <GemsManagement
+            currentUser={currentUser}
+            onBack={() => setActiveView('gems')}
+          />
+        ) : null;
+      case 'tokenCounter':
+        return permissions.isAdmin ? (
+          <TokenCounterManagement
             currentUser={currentUser}
             onBack={() => setActiveView('gems')}
           />

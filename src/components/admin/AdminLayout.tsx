@@ -12,6 +12,7 @@ const menuItems = [
   { to: '/admin/topics', label: 'Argomenti', icon: '💡', roles: [UserRole.ADMIN] },
   { to: '/admin/channels', label: 'Canali', icon: '📺', roles: [UserRole.ADMIN, UserRole.MODERATOR] },
   { to: '/admin/feedback', label: 'Feedback', icon: '💬', roles: [UserRole.ADMIN] },
+  { to: '/admin/token-counter', label: 'Token LLM', icon: '🔢', roles: [UserRole.ADMIN] }, // nuova voce
 ];
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser }) => {
@@ -54,4 +55,3 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser }) => {
 };
 
 export default AdminLayout;
-

@@ -136,5 +136,17 @@ service cloud.firestore {
         get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.isPublic == true;
       allow update, delete: if isAdmin();
     }
+
+    // Regole per la collection token_counter (lettura solo admin)
+    match /token_counter/{docId} {
+      allow read: if isAdmin();
+      allow write, update, delete: if isAdmin();
+    }
+
+    // Regole per la collection llm_models (lettura admin, scrittura admin)
+    match /llm_models/{modelId} {
+      allow read: if isAdmin();
+      allow write, update, delete: if isAdmin();
+    }
   }
 }

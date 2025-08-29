@@ -19,7 +19,7 @@ import {
   DocumentData
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Gem, Channel, User, SavedList, UserQuestion, UserRole, TopicSuggestion, ListWithItems } from '../types';
+import { Gem, Channel, User, SavedList, UserQuestion, UserRole, TopicSuggestion, ListWithItems, LLMModel } from '../types';
 import { getDefaultPermissions } from './roleService';
 import * as listService from './listService';
 
@@ -817,5 +817,103 @@ export const fetchGemsFiltered = async (
   } catch (error) {
     console.error('Error fetching filtered gems:', error);
     return { gems: [] };
+  }
+};
+
+// --- Token Counter Operations ---
+export interface TokenCounter {
+  createdAt: any;
+  gemId: string;
+  inputToken: number;
+  model: string;
+  outputToken: number;
+  subtype: string;
+  type: string;
+  userId: string;
+  id?: string;
+}
+
+export const fetchTokenCounter = async ({
+  startDate,
+  endDate,
+  model,
+  type,
+  subtype,
+  userId
+}: {
+  startDate?: Date;
+  endDate?: Date;
+  model?: string;
+  type?: string;
+  subtype?: string;
+  userId?: string;
+}): Promise<TokenCounter[]> => {
+  try {
+    let q = query(collection(db, 'token_counter'));
+    const filters = [];
+    if (startDate) filters.push(where('createdAt', '>=', startDate));
+    if (endDate) filters.push(where('createdAt', '<=', endDate));
+    if (model) filters.push(where('model', '==', model));
+    if (type) filters.push(where('type', '==', type));
+    if (subtype) filters.push(where('subtype', '==', subtype));
+    if (userId) filters.push(where('userId', '==', userId));
+    if (filters.length > 0) {
+      q = query(collection(db, 'token_counter'), ...filters);
+    }
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TokenCounter));
+  } catch (error) {
+    console.error('Error fetching token_counter:', error);
+    return [];
+  }
+};
+
+// Funzioni per gestire i modelli LLM e i loro costi
+export const fetchLLMModels = async (): Promise<LLMModel[]> => {
+  try {
+    const modelsCollection = collection(db, 'llm_models');
+    const q = query(modelsCollection, orderBy('name'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LLMModel));
+  } catch (error) {
+    console.error('Error fetching LLM models:', error);
+    return [];
+  }
+};
+
+export const createLLMModel = async (model: Omit<LLMModel, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
+  try {
+    const docRef = await addDoc(collection(db, 'llm_models'), {
+      ...model,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isActive: true
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating LLM model:', error);
+    throw error;
+  }
+};
+
+export const updateLLMModel = async (id: string, updates: Partial<LLMModel>): Promise<void> => {
+  try {
+    const docRef = doc(db, 'llm_models', id);
+    await updateDoc(docRef, {
+      ...updates,
+      updatedAt: new Date()
+    });
+  } catch (error) {
+    console.error('Error updating LLM model:', error);
+    throw error;
+  }
+};
+
+export const deleteLLMModel = async (id: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'llm_models', id));
+  } catch (error) {
+    console.error('Error deleting LLM model:', error);
+    throw error;
   }
 };

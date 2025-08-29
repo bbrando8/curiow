@@ -200,3 +200,14 @@ export interface BetaFeedback {
   createdAt: Date;
   updatedAt?: Date;
 }
+
+// Tipo per i modelli LLM e i loro costi
+export interface LLMModel {
+  id: string;
+  name: string; // Nome del modello (es. "gpt-4", "claude-3-opus")
+  inputCostPerMilion: number; // Costo per milione di token di input in dollari (nome corretto dal DB)
+  outputCostPerMilion: number; // Costo per milione di token di output in dollari (nome corretto dal DB)
+  createdAt?: Date;
+  updatedAt?: Date;
+  isActive?: boolean; // Per disabilitare modelli obsoleti
+}

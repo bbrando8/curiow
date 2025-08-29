@@ -3,6 +3,14 @@
   <component name="CopilotDiffPersistence">
     <option name="pendingDiffs">
       <map>
+        <entry key="$PROJECT_DIR$/populate-llm-models.js">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/populate-llm-models.js" />
+              <option name="updatedContent" value="// Script per popolare la collection llm_models con dati di esempio&#10;// Esegui questo script nella console del browser quando sei autenticato come admin&#10;&#10;const createLLMModels = async () =&gt; {&#10;  const models = [&#10;    {&#10;      name: 'gemini-1.5-flash',&#10;      inputCostPerMillion: 0.075,   // $0.075 per milione di token input&#10;      outputCostPerMillion: 0.3,   // $0.30 per milione di token output&#10;      isActive: true&#10;    },&#10;    {&#10;      name: 'gemini-2.5-flash',&#10;      inputCostPerMillion: 0.1,    // $0.10 per milione di token input  &#10;      outputCostPerMillion: 0.4,   // $0.40 per milione di token output&#10;      isActive: true&#10;    },&#10;    {&#10;      name: 'gemini-2.5-flash-lite',&#10;      inputCostPerMillion: 0.05,   // $0.05 per milione di token input&#10;      outputCostPerMillion: 0.2,   // $0.20 per milione di token output&#10;      isActive: true&#10;    },&#10;    {&#10;      name: 'sonar-pro',&#10;      inputCostPerMillion: 3.0,    // $3.00 per milione di token input&#10;      outputCostPerMillion: 15.0,  // $15.00 per milione di token output&#10;      isActive: true&#10;    }&#10;  ];&#10;&#10;  console.log('Creating LLM models...');&#10;  &#10;  for (const model of models) {&#10;    try {&#10;      const docRef = await window.firestoreService.createLLMModel(model);&#10;      console.log(`✅ Created model ${model.name} with ID: ${docRef}`);&#10;    } catch (error) {&#10;      console.error(`❌ Error creating model ${model.name}:`, error);&#10;    }&#10;  }&#10;  &#10;  console.log('Done! Refresh the page to see the costs.');&#10;};&#10;&#10;// Esegui la funzione&#10;createLLMModels();" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
         <entry key="$PROJECT_DIR$/public/index.html">
           <value>
             <PendingDiffInfo>
