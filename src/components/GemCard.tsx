@@ -129,6 +129,15 @@ const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRe
               video.pause();
               video.currentTime = 0;
             }}
+            onTouchStart={(e) => {
+              const video = e.target as HTMLVideoElement;
+              video.play().catch(() => {});
+            }}
+            onTouchEnd={(e) => {
+              const video = e.target as HTMLVideoElement;
+              video.pause();
+              video.currentTime = 0;
+            }}
           />
         ) : (
           <img src={gem.imageUrl} alt={gem.title} className="w-full h-auto object-cover aspect-[3/4]" />

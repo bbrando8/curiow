@@ -363,6 +363,15 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
                       video.pause();
                       video.currentTime = 0;
                     }}
+                    onTouchStart={(e) => {
+                      const video = e.target as HTMLVideoElement;
+                      video.play().catch(() => {});
+                    }}
+                    onTouchEnd={(e) => {
+                      const video = e.target as HTMLVideoElement;
+                      video.pause();
+                      video.currentTime = 0;
+                    }}
                   />
                 ) : (
                   <img ref={imgRef} src={gem.imageUrl} alt={gem.title} onLoad={handleImageLoad} className="w-full h-auto object-cover md:rounded-lg" />
