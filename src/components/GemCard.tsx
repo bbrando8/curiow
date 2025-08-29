@@ -113,7 +113,26 @@ const GemCard: React.FC<GemCardProps> = ({ gem, isLoggedIn, isFavorite, onSaveRe
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleCardClick()}
     >
       <div className="relative overflow-hidden rounded-t-xl">
-        <img src={gem.imageUrl} alt={gem.title} className="w-full h-auto object-cover aspect-[3/4]" />
+        {gem.videoUrl ? (
+          <video
+            src={gem.videoUrl}
+            className="w-full h-auto object-cover aspect-[3/4]"
+            muted
+            loop
+            playsInline
+            onMouseEnter={(e) => {
+              const video = e.target as HTMLVideoElement;
+              video.play().catch(() => {});
+            }}
+            onMouseLeave={(e) => {
+              const video = e.target as HTMLVideoElement;
+              video.pause();
+              video.currentTime = 0;
+            }}
+          />
+        ) : (
+          <img src={gem.imageUrl} alt={gem.title} className="w-full h-auto object-cover aspect-[3/4]" />
+        )}
         {summary && (
           <div className="absolute inset-x-0 bottom-0" onMouseEnter={() => setIsHovering(true)} onMouseLeave={() => setIsHovering(false)}>
             <button

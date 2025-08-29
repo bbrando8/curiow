@@ -346,8 +346,27 @@ const GemDetailView: React.FC<GemDetailViewProps> = ({ gem, isFavorite, onBack, 
         />
         <article>
             <div className="p-5 sm:p-8">
-                {/* Immagine prima */}
-                <img ref={imgRef} src={gem.imageUrl} alt={gem.title} onLoad={handleImageLoad} className="w-full h-auto object-cover md:rounded-lg" />
+                {/* Immagine/Video prima */}
+                {gem.videoUrl ? (
+                  <video
+                    src={gem.videoUrl}
+                    className="w-full h-auto object-cover md:rounded-lg"
+                    muted
+                    loop
+                    playsInline
+                    onMouseEnter={(e) => {
+                      const video = e.target as HTMLVideoElement;
+                      video.play().catch(() => {});
+                    }}
+                    onMouseLeave={(e) => {
+                      const video = e.target as HTMLVideoElement;
+                      video.pause();
+                      video.currentTime = 0;
+                    }}
+                  />
+                ) : (
+                  <img ref={imgRef} src={gem.imageUrl} alt={gem.title} onLoad={handleImageLoad} className="w-full h-auto object-cover md:rounded-lg" />
+                )}
                 {/* Titolo sotto immagine (ancora) */}
                 <h1 id="gem-title" className="mt-4 text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white leading-tight">{gem.title}</h1>
 

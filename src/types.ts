@@ -100,6 +100,7 @@ export interface Gem {
   /** @deprecated Spostato in content.description */
   description?: string;
   imageUrl: string;
+  videoUrl?: string; // nuovo campo opzionale per il video
   userQuestions: UserQuestion[];
   tags: string[];
   suggestedQuestions: string[];
@@ -205,8 +206,9 @@ export interface BetaFeedback {
 export interface LLMModel {
   id: string;
   name: string; // Nome del modello (es. "gpt-4", "claude-3-opus")
-  inputCostPerMilion: number; // Costo per milione di token di input in dollari (nome corretto dal DB)
-  outputCostPerMilion: number; // Costo per milione di token di output in dollari (nome corretto dal DB)
+  inputCostPerMilion?: number; // Costo per milione di token di input in dollari (opzionale per modelli a costo fisso)
+  outputCostPerMilion?: number; // Costo per milione di token di output in dollari (opzionale per modelli a costo fisso)
+  fixCost?: number; // Costo fisso per singola elaborazione in dollari (per modelli che non usano pricing per token)
   createdAt?: Date;
   updatedAt?: Date;
   isActive?: boolean; // Per disabilitare modelli obsoleti

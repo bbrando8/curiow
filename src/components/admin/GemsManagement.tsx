@@ -25,6 +25,7 @@ interface GemFormData {
   description: string; // sarà salvata in content.description
   channelId: string;
   imageUrl: string;
+  videoUrl: string; // nuovo campo per il video
   tags: string[];
   suggestedQuestions: string[];
   sources: Array<{ uri: string; title: string }>;
@@ -63,6 +64,7 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
     description: '',
     channelId: '',
     imageUrl: '',
+    videoUrl: '', // inizializza il nuovo campo
     tags: [],
     suggestedQuestions: [],
     sources: []
@@ -146,6 +148,7 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
         topic: (gems[0]?.topic) || 'Cultura Generale & Curiosità', // fallback se UI non gestisce topic
         channelId: formData.channelId,
         imageUrl: formData.imageUrl,
+        videoUrl: formData.videoUrl, // includi il nuovo campo
         tags: formData.tags,
         suggestedQuestions: formData.suggestedQuestions,
         sources: formData.sources,
@@ -169,6 +172,7 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
         title: formData.title,
         channelId: formData.channelId,
         imageUrl: formData.imageUrl,
+        videoUrl: formData.videoUrl, // aggiorna il campo videoUrl
         tags: formData.tags,
         suggestedQuestions: formData.suggestedQuestions,
         sources: formData.sources,
@@ -198,6 +202,7 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
       description: '',
       channelId: '',
       imageUrl: '',
+      videoUrl: '', // reset del campo videoUrl
       tags: [],
       suggestedQuestions: [],
       sources: []
@@ -211,6 +216,7 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
       description: (gem as any).content?.description || '',
       channelId: (gem as any).channelId || '',
       imageUrl: gem.imageUrl || '',
+      videoUrl: gem.videoUrl || '', // carica il valore esistente o lascia vuoto
       tags: gem.tags || [],
       suggestedQuestions: gem.suggestedQuestions || [],
       sources: (gem as any).search_results && (gem as any).search_results.length > 0 ? (gem as any).search_results : gem.sources || []
@@ -1042,6 +1048,22 @@ const GemsManagement: React.FC<GemsManagementProps> = ({ currentUser, onBack }) 
                           </button>
                         </div>
                       </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      URL Video (opzionale)
+                    </label>
+                    <input
+                      type="url"
+                      value={formData.videoUrl}
+                      onChange={(e) => setFormData({ ...formData, videoUrl: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="https://... (se presente, sostituisce l'immagine)"
+                    />
+                    {formData.videoUrl && (
+                      <div className="mt-2 text-xs text-gray-500 break-all">Video: {formData.videoUrl}</div>
                     )}
                   </div>
 

@@ -75,7 +75,7 @@ const TokenCounterManagement: React.FC<TokenCounterManagementProps> = ({ current
     loadData();
   }, [filters, currentUser]);
 
-  // Funzione helper per calcolare i costi con cache
+  // Funzione helper per calcolare i costi con cache - supporta sia pricing per token che costo fisso
   const calculateCost = (inputTokens: number, outputTokens: number, modelName: string): { inputCost: number; outputCost: number; totalCost: number } => {
     // Usa la cache per ottenere il modello
     const model = modelsMapRef.current.get(modelName);
@@ -84,11 +84,21 @@ const TokenCounterManagement: React.FC<TokenCounterManagementProps> = ({ current
       return { inputCost: 0, outputCost: 0, totalCost: 0 };
     }
 
-    // Usa i nomi corretti dei campi dal database
-    const inputCostPerMillion = model.inputCostPerMilion;  // Nota: "Milion" non "Million"
-    const outputCostPerMillion = model.outputCostPerMilion; // Nota: "Milion" non "Million"
+    // Controlla se il modello ha un costo fisso
+    if (typeof model.fixCost === 'number' && model.fixCost > 0) {
+      // Modello con costo fisso per elaborazione
+      return {
+        inputCost: 0,
+        outputCost: 0,
+        totalCost: model.fixCost
+      };
+    }
 
-    // Validazione che i valori siano numeri
+    // Modello con pricing per token
+    const inputCostPerMillion = model.inputCostPerMilion;
+    const outputCostPerMillion = model.outputCostPerMilion;
+
+    // Validazione che i valori siano numeri per i modelli basati su token
     if (typeof inputCostPerMillion !== 'number' || typeof outputCostPerMillion !== 'number') {
       return { inputCost: 0, outputCost: 0, totalCost: 0 };
     }
@@ -448,26 +458,46 @@ const TokenCounterManagement: React.FC<TokenCounterManagementProps> = ({ current
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Riepilogo per Modello</h3>
           <div className="space-y-3">
-            {Object.entries(aggregates.byModel).map(([model, stats]) => (
-              <div key={model} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <div className="font-medium text-gray-900">{model}</div>
-                  <div className="text-sm text-gray-500">{stats.count} richieste</div>
-                  <div className="text-xs font-medium text-green-600">{formatCurrency(stats.totalCost)}</div>
+            {Object.entries(aggregates.byModel).map(([model, stats]) => {
+              // Determina il tipo di pricing del modello
+              const modelData = modelsMapRef.current.get(model);
+              const isFixedCost = modelData && typeof modelData.fixCost === 'number' && modelData.fixCost > 0;
+
+              return (
+                <div key={model} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className="font-medium text-gray-900">{model}</div>
+                      {isFixedCost && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                          Costo Fisso
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-500">{stats.count} richieste</div>
+                    <div className="text-xs font-medium text-green-600">{formatCurrency(stats.totalCost)}</div>
+                    {isFixedCost && modelData && (
+                      <div className="text-xs text-gray-500">
+                        {formatCurrency(modelData.fixCost)} per elaborazione
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-gray-900">
+                      {formatNumber(stats.input + stats.output)} token
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      In: {formatNumber(stats.input)} | Out: {formatNumber(stats.output)}
+                    </div>
+                    {!isFixedCost && (
+                      <div className="text-xs text-gray-500">
+                        {formatCurrency(stats.inputCost)} | {formatCurrency(stats.outputCost)}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-sm font-medium text-gray-900">
-                    {formatNumber(stats.input + stats.output)} token
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    In: {formatNumber(stats.input)} | Out: {formatNumber(stats.output)}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {formatCurrency(stats.inputCost)} | {formatCurrency(stats.outputCost)}
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
